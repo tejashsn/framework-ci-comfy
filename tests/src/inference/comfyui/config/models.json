@@ -1,0 +1,307 @@
+{
+  "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "loras"
+    ]
+  },
+  "ae.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "vae"
+    ]
+  },
+  "chroma-radiance-x0.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "clip_l.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "clip",
+      "text_encoders"
+    ]
+  },
+  "flux1-krea-dev_fp8_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "flux1-schnell-fp8.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "checkpoints"
+    ]
+  },
+  "flux2-vae.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "vae"
+    ]
+  },
+  "flux2_dev_fp8mixed.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "ltx-video-2b-v0.9.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "checkpoints"
+    ]
+  },
+  "mistral_3_small_flux2_bf16.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "clip",
+      "text_encoders"
+    ]
+  },
+  "qwen_2.5_vl_7b_fp8_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "clip",
+      "text_encoders"
+    ]
+  },
+  "qwen_3_4b.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "clip",
+      "text_encoders"
+    ]
+  },
+  "qwen_image_2512_fp8_e4m3fn.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "qwen_image_vae.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "vae"
+    ]
+  },
+  "sd3.5_large_controlnet_canny.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "controlnet"
+    ]
+  },
+  "sd3.5_large_fp8_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "checkpoints"
+    ]
+  },
+  "sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "checkpoints"
+    ]
+  },
+  "sd3_medium_incl_clips_t5xxlfp8.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "checkpoints"
+    ]
+  },
+  "sd_xl_base_1.0.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "checkpoints"
+    ]
+  },
+  "sd_xl_refiner_1.0.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "checkpoints"
+    ]
+  },
+  "t5xxl_fp16.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "clip",
+      "text_encoders"
+    ]
+  },
+  "t5xxl_fp8_e4m3fn_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "clip",
+      "text_encoders"
+    ]
+  },
+  "umt5_xxl_fp8_e4m3fn_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "clip",
+      "text_encoders"
+    ]
+  },
+  "v1-5-pruned-emaonly-fp16.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "checkpoints"
+    ]
+  },
+  "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "loras"
+    ]
+  },
+  "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "loras"
+    ]
+  },
+  "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "loras"
+    ]
+  },
+  "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "loras"
+    ]
+  },
+  "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "wan2.2_ti2v_5B_fp16.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  },
+  "wan2.2_vae.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "vae"
+    ]
+  },
+  "wan_2.1_vae.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "vae"
+    ]
+  },
+  "z_image_turbo_bf16.safetensors": {
+    "sha256": null,
+    "size_bytes": null,
+    "source": null,
+    "subdirs": [
+      "unet",
+      "diffusion_models"
+    ]
+  }
+}

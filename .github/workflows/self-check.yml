@@ -1,0 +1,26 @@
+name: Framework self-check (no GPU — NOT ComfyUI validation)
+
+# Runs the suite's own unit tests (tests/unit/) on GitHub-hosted runners. These
+# exercise ONLY the harness plumbing (schema, config sync, adapters) — they never
+# start ComfyUI or touch a GPU. A green check here does NOT mean ComfyUI/ROCm
+# validation passed; that runs via comfyui-ci.yml on self-hosted GPU runners and
+# is evidenced by results_<test>.json.
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    name: unit tests (no GPU)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest tests/unit -q

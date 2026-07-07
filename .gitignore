@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+logs/
+protocol_runs/
+config/machine_profile.json
+artifacts/

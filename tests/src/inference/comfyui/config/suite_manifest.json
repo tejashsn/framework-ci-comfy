@@ -1,0 +1,859 @@
+{
+  "schema_version": "2.0",
+  "description": "ComfyUI AMD validation suite - aligned to TMS catalogue v2025-06",
+  "scope": "comfyui_only",
+  "tests": [
+    {
+      "test_name": "comfyui_stable_diffusion_xl_base_1.0",
+      "tms_key": "1002335",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Automated",
+      "workflow": "workflows/sdxl_base_1.0.json",
+      "timeout_minutes": 20,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1030",
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx908"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 8192,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 3,
+        "max_latency_s": 60
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "smoke",
+        "sdxl",
+        "regression"
+      ]
+    },
+    {
+      "test_name": "comfyui_stable_diffusion_2_1",
+      "tms_key": "1002321",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Automated",
+      "workflow": "workflows/sd2_1.json",
+      "timeout_minutes": 15,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1030",
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx908"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 6144,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 3,
+        "max_latency_s": 45
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "smoke",
+        "sd2",
+        "regression"
+      ]
+    },
+    {
+      "test_name": "comfyui_sd3_medium_fp16",
+      "tms_key": "1002783",
+      "mode": "Perf",
+      "category": "rocr",
+      "automation": "Automated",
+      "workflow": "workflows/sd3_medium_fp16.json",
+      "timeout_minutes": 25,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a",
+        "gfx908"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 10240,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 3,
+        "max_latency_s": 90
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "sd3",
+        "fp16",
+        "regression"
+      ]
+    },
+    {
+      "test_name": "comfyui_sd3.5_simple",
+      "tms_key": "1002265",
+      "mode": "Func",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/sd3.5_simple.json",
+      "timeout_minutes": 25,
+      "timeout_minutes_by_arch": {
+        "gfx1153": 60
+      },
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 10240,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 120
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "sd3.5",
+        "func"
+      ]
+    },
+    {
+      "test_name": "comfyui_sd3.5_large_canny_controlnet",
+      "tms_key": "1002195",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/sd3.5_large_canny_controlnet.json",
+      "timeout_minutes": 40,
+      "timeout_minutes_by_arch": {
+        "gfx1153": 20
+      },
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 20480,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 180
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "sd3.5",
+        "controlnet"
+      ]
+    },
+    {
+      "test_name": "comfyui_stable_diffusion_3.5_medium",
+      "tms_key": "1002319",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/sd3.5_medium.json",
+      "timeout_minutes": 30,
+      "timeout_minutes_by_arch": {
+        "gfx1153": 75
+      },
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 12288,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 2,
+        "max_latency_s": 120
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "sd3.5",
+        "medium"
+      ]
+    },
+    {
+      "test_name": "comfyui_sd3.5_medium",
+      "tms_key": "1002211",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/sd3.5_medium.json",
+      "timeout_minutes": 30,
+      "timeout_minutes_by_arch": {
+        "gfx1153": 70
+      },
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 12288,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 2,
+        "max_latency_s": 120
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "sd3.5",
+        "medium",
+        "tms-1002211"
+      ]
+    },
+    {
+      "test_name": "comfyui_flux1_dev",
+      "tms_key": "1002213",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/flux1_dev.json",
+      "timeout_minutes": 35,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 16384,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 2,
+        "max_latency_s": 150
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "flux",
+        "regression"
+      ]
+    },
+    {
+      "test_name": "comfyui_flux2_dev",
+      "tms_key": "1002194",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/flux2_dev.json",
+      "timeout_minutes": 35,
+      "timeout_minutes_by_arch": {
+        "gfx1153": 300
+      },
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 16384,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 2,
+        "max_latency_s": 150
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "flux2"
+      ]
+    },
+    {
+      "test_name": "comfyui_flux1_schnell",
+      "tms_key": "1002214",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/flux1_schnell.json",
+      "timeout_minutes": 25,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 12288,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 1,
+        "max_latency_s": 60
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "flux",
+        "schnell"
+      ]
+    },
+    {
+      "test_name": "comfyui_chroma",
+      "tms_key": "1002264",
+      "mode": "Func",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/chroma.json",
+      "timeout_minutes": 30,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 10240,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 120
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "func",
+        "chroma"
+      ]
+    },
+    {
+      "test_name": "comfyui_qwen_image_2512",
+      "tms_key": "1002318",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Automated",
+      "workflow": "workflows/qwen_image_2512.json",
+      "timeout_minutes": 30,
+      "timeout_minutes_by_arch": {
+        "gfx1153": 55
+      },
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 10240,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 2,
+        "max_latency_s": 120
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "qwen",
+        "vlm",
+        "regression"
+      ]
+    },
+    {
+      "test_name": "comfyui_z_image_turbo",
+      "tms_key": "1002212",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/z_image_turbo.json",
+      "timeout_minutes": 30,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1030",
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 6144,
+      "expected_output_type": "image",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 3,
+        "max_latency_s": 30
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "turbo",
+        "fast"
+      ]
+    },
+    {
+      "test_name": "comfyui_kokoro_82m",
+      "tms_key": "1002324",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Automated",
+      "workflow": "workflows/kokoro_82m.json",
+      "timeout_minutes": 15,
+      "enabled": false,
+      "disabled_reason": "No Kokoro TTS model/node installed on this box - kept as honest SKIP, not a fake-green placeholder",
+      "gpu_arch": [
+        "gfx1030",
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 4096,
+      "expected_output_type": "audio",
+      "perf_targets": {
+        "warmup_runs": 1,
+        "timed_runs": 3,
+        "max_latency_s": 30
+      },
+      "retry_count": 1,
+      "retry_delay_seconds": 30,
+      "tags": [
+        "tts",
+        "audio",
+        "smoke",
+        "regression"
+      ]
+    },
+    {
+      "test_name": "comfyui_ltx_T2V",
+      "tms_key": "1002118",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/ltx_t2v.json",
+      "timeout_minutes": 45,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a",
+        "gfx908"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 16384,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 300
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "ltx"
+      ]
+    },
+    {
+      "test_name": "comfyui_ltx_I2V",
+      "tms_key": "1002119",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/ltx_i2v.json",
+      "timeout_minutes": 45,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a",
+        "gfx908"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 16384,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 300
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "ltx",
+        "i2v"
+      ]
+    },
+    {
+      "test_name": "comfyui_ltx_pixelart",
+      "tms_key": "1002120",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/ltx_pixelart.json",
+      "timeout_minutes": 40,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a",
+        "gfx908"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 16384,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 240
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "ltx",
+        "style"
+      ]
+    },
+    {
+      "test_name": "comfyui_wan2.2_5B_T2V",
+      "tms_key": "1002116",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/wan2.2_5b_t2v.json",
+      "timeout_minutes": 60,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 12288,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 480
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "wan",
+        "5b"
+      ]
+    },
+    {
+      "test_name": "comfyui_wan2.2_5B_I2V",
+      "tms_key": "1002117",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/wan2.2_5b_i2v.json",
+      "timeout_minutes": 60,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 12288,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 480
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "wan",
+        "5b",
+        "i2v"
+      ]
+    },
+    {
+      "test_name": "comfyui_wan2.2_14B_T2V",
+      "tms_key": "1002114",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/wan2.2_14b_t2v.json",
+      "timeout_minutes": 90,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1150",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 24576,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 600
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "wan",
+        "14b"
+      ]
+    },
+    {
+      "test_name": "comfyui_wan2.2_14B_I2V",
+      "tms_key": "1002115",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/wan2.2_14b_i2v.json",
+      "timeout_minutes": 90,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1150",
+        "gfx90a"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 24576,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 600
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "wan",
+        "14b",
+        "i2v"
+      ]
+    },
+    {
+      "test_name": "comfyui_wan2.2_lightning_t2v_a14b_4steps_lora_high_fp16",
+      "tms_key": "1002337",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Automated",
+      "workflow": "workflows/wan2.2_lightning_t2v_a14b_4steps_lora_high_fp16.json",
+      "timeout_minutes": 45,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 12288,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 300
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "wan",
+        "lightning",
+        "automated"
+      ]
+    },
+    {
+      "test_name": "comfyui_wan2.2_i2v_a14b_fp8_e4m3_lightx2v",
+      "tms_key": "1002338",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Automated",
+      "workflow": "workflows/wan2.2_i2v_a14b_fp8_e4m3_lightx2v.json",
+      "timeout_minutes": 45,
+      "enabled": true,
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx1150",
+        "gfx1153"
+      ],
+      "os": [
+        "linux",
+        "windows"
+      ],
+      "min_vram_mb": 12288,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 300
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "wan",
+        "fp8",
+        "i2v",
+        "automated"
+      ]
+    },
+    {
+      "test_name": "comfyui_wan_infinitetalk",
+      "tms_key": "1002121",
+      "mode": "Perf",
+      "category": "mlframeworks",
+      "automation": "Manual",
+      "workflow": "workflows/wan_infinitetalk.json",
+      "timeout_minutes": 60,
+      "enabled": false,
+      "disabled_reason": "No input audio available for InfiniteTalk on this box - kept as honest SKIP, not a fake-green placeholder",
+      "gpu_arch": [
+        "gfx1100",
+        "gfx1101",
+        "gfx90a"
+      ],
+      "os": [
+        "linux"
+      ],
+      "min_vram_mb": 16384,
+      "expected_output_type": "video",
+      "perf_targets": {
+        "warmup_runs": 0,
+        "timed_runs": 1,
+        "max_latency_s": 480
+      },
+      "retry_count": 0,
+      "retry_delay_seconds": 0,
+      "tags": [
+        "video",
+        "wan",
+        "talking-head"
+      ]
+    }
+  ]
+}

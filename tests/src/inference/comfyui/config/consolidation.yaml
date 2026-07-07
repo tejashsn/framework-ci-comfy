@@ -1,0 +1,12 @@
+# ComfyUI results consolidation config (framework-ci suite style).
+# Consumed by tests.utils.consolidation.config_consolidator on the fleet.
+suite: comfyui
+framework: comfyui
+result_glob: "results_*.json"
+primary_metric: latency
+fail_on:
+  - FAIL
+  - INFRA_ERROR
+skip_states:
+  - SKIP
+columns: [test_name, result_status, detected_gpu_arch, test_execution_time, failure_reason]
