@@ -1,84 +1,108 @@
 # framework-ci-comfy
 
-ComfyUI validation as a **framework-ci-aligned suite** — a standalone repo whose
-layout, result schema, catalog, RASTRA payload, and CI mirror the AMD
-`frameworks-qa-ci` fleet, so it drops into that repo's `tests/src/inference/`
-model or runs on its own.
+A test suite that checks whether **image and video AI models run correctly on
+AMD GPUs**, using [ComfyUI](https://github.com/comfyanonymous/ComfyUI) as the
+engine. It runs a set of real image/video generations (Stable Diffusion, SDXL,
+SD3, Flux, LTX video, Wan, etc.), decides PASS / FAIL / SKIP for each, and writes
+the results in a standard format the AMD `frameworks-qa-ci` fleet understands.
 
-It carries the hardened ComfyUI validation engine (provenance stamping, model
-presence + identity SKIP, IO→INFRA classification, per-test server-log capture,
-frozen 0/1/2/3 exit codes, `--doctor`) as the suite's guts, wrapped in the
-fleet's conventions.
+If you just want to answer *"does model X actually generate a picture on this AMD
+GPU, and how fast?"* — that's what this does.
 
-## Layout (matches frameworks-qa-ci)
+---
+
+## The 30-second mental model
 
 ```
-tests/src/inference/comfyui/
-  comfyui_benchmark.py        # standalone entry (xDiT/vLLM-style), self-orchestrates a container
-  config/
-    suite_manifest.json       # AUTHORITATIVE test catalog (name/tags/arch/os/timeout)
-    models_config.yaml        # fleet-facing view, DERIVED from the manifest
-    models.json               # model filename -> sha256/size/source (identity check)
-    consolidation.yaml        # fleet consolidation config
-  executors/                  # hardened engine (validator, protocol, runtime, model_check, preflight)
-  workflows/                  # ComfyUI API-format graphs (one per test)
-  scripts/
-    create_config.py          # regenerate models_config.yaml; --parse-inputs for CI matrix
-    generate_summary.py       # markdown Step Summary
-    upload_from_artifacts.py  # build RASTRA payload (dry-run)
-tests/utils/results/handler.py  # RASTRA payload (fleet shape), dry-run
-.github/workflows/
-  comfyui-ci.yml              # 4-job: setup -> benchmark -> consolidate -> summary (fleet actions)
-  self-check.yml              # unit tests only (no GPU) — NOT validation
+  suite_manifest.json          the list of tests (name, which workflow, which GPUs, timeout)
+        │
+        ▼
+  comfyui_benchmark.py          you run this; it picks the eligible tests and runs each one
+        │
+        ▼
+  a running ComfyUI server      does the actual generation on the GPU
+        │
+        ▼
+  results_<test>.json           one score file per test: PASS/FAIL/SKIP + how long it took
+  benchmark_summary.json        the roll-up (5 passed, 1 skipped, ...)
 ```
 
-## Two kinds of tests (do not conflate)
+Each test = **one ComfyUI workflow** (a `.json` graph in `workflows/`) run with a
+fixed prompt, on a real GPU. The prompt lives *inside* that workflow file.
 
-| Name | Command | What | GPU/ComfyUI? |
+---
+
+## Two things called "tests" — don't mix them up
+
+| | Command | What it checks | Needs a GPU? |
 |---|---|---|---|
-| **Framework self-check** | `pytest tests/unit` | harness plumbing (schema, config sync, adapters) | No |
-| **ComfyUI/ROCm validation** | `comfyui-ci.yml` / `comfyui_benchmark.py` | the real ~22 GPU generation tests | Yes |
+| **Self-check** | `pytest tests/unit` | that the suite's own plumbing works (config in sync, schema valid) | **No** |
+| **Real validation** | `comfyui_benchmark.py` | that models actually generate on the AMD GPU | **Yes** |
 
-A green self-check does **not** mean validation passed — that is proven only by
-`results_<test>.json` (RASTRA shape) from a real GPU run.
+A green self-check only means the harness is wired correctly. It does **not** mean
+any model passed — that's only proven by a `results_<test>.json` from a real GPU run.
 
-## Run one test on a node (self-orchestrating container)
+---
 
-```bash
-python tests/src/inference/comfyui/comfyui_benchmark.py \
-  --model comfyui_stable_diffusion_2_1 --arch gfx942 \
-  --rocm-version 7.15.0 --docker-image rocm/pytorch:latest \
-  --results-dir logs/benchmark_results
-```
+## Quick start
 
-Or by priority/tags: `--model P0`, or `--tags smoke`. Output:
-`logs/benchmark_results/results_<test>.json` + `benchmark_summary.json`.
-
-## Result shape (framework-ci RASTRA)
-
-Each `results_<test>.json` carries a single `results` list with
-`test_config` (test_name, detected_gpu_arch vs requested, tms_key, rocm_version,
-git_sha, workflow_hash, canonical), `test_metrics` (`[{metric_name, score, unit,
-flag, primary}]`), `test_result` (PASS/FAIL), `result_status` (PASS/FAIL/SKIP/
-INFRA_ERROR — the honest verdict is never lost), and `test_execution_time`
-(minutes). `handler.upload_results()` aggregates these into the fleet payload
-with `deployment_info.execution_label`.
-
-## Config is derived, never hand-edited
-
-`suite_manifest.json` is authoritative. Regenerate the fleet view:
+### 1. Self-check (no GPU, ~1 second)
 
 ```bash
-python tests/src/inference/comfyui/scripts/create_config.py --regenerate
-python tests/src/inference/comfyui/scripts/create_config.py --check   # drift guard (CI)
+pip install -r requirements.txt        # pytest, pyyaml, jsonschema
+python -m pytest tests/unit -q         # expect: 8 passed
 ```
 
-## What is stubbed (wire later)
+### 2. Real validation on a GPU box
 
-- **RASTRA POST** — `handler.upload_results` is dry-run only; it writes
-  `logs/payload.json` and makes no network call. Add the real POST + creds.
-- **Composite actions** — `comfyui-ci.yml` references the fleet's
-  `provision-runtime`, `upload-to-artifactory`, etc. They live in
-  frameworks-qa-ci, not here; the workflow is drop-in there.
+You need a ComfyUI server running and reachable (default `http://127.0.0.1:8188`),
+with the model weights placed under `ComfyUI/models/`.
 
-See [MIGRATION_STATUS.md](MIGRATION_STATUS.md) for the full manual-steps list.
+```bash
+cd tests/src/inference/comfyui
+export COMFYUI_PATH=~/ComfyUI          # so it can find your models/ folder
+
+# Run ONE test:
+python comfyui_benchmark.py \
+  --model comfyui_stable_diffusion_2_1 \
+  --arch gfx908 --rocm-version 7.15.0 \
+  --comfyui-url http://127.0.0.1:8188 \
+  --results-dir ~/results
+
+# Run EVERY test eligible for this GPU (just drop --model):
+python comfyui_benchmark.py --arch gfx908 --rocm-version 7.15.0 \
+  --comfyui-url http://127.0.0.1:8188 --results-dir ~/results
+
+# Run a subset by tag:
+python comfyui_benchmark.py --tags smoke --arch gfx908 \
+  --comfyui-url http://127.0.0.1:8188 --results-dir ~/results
+```
+
+> **Tip:** run it with the same Python that your ComfyUI uses (the one that can
+> `import torch` and see the GPU). If you omit `--arch`, it auto-detects the GPU.
+
+### Just want to know if the box is ready? (no generation)
+
+```bash
+python executors/preflight_check.py \
+  --expected-rocm '7.15.*' --expected-gpu-arch gfx908 --doctor
+```
+
+This tells you, in plain English, whether the GPU, PyTorch, and ComfyUI are all
+good — and which model weights are present vs missing — without running any tests.
+
+---
+
+## Where the results and logs go
+
+Everything lands under the `--results-dir` you pass (e.g. `~/results`):
+
+```
+~/results/
+├── results_<test>.json               ← THE SCORE for each test (see below)
+├── benchmark_summary.json            ← roll-up: PASS/FAIL/SKIP counts, GPU, git commit
+└── <test>_<timestamp>/               ← evidence folder for that test
+    └── <test>_<timestamp>/
+        ├── summary.json              verdict + reason + duration
+        ├── results.json              raw latency numbers
+        ├── pr
