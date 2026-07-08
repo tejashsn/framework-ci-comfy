@@ -4,6 +4,10 @@ New standalone repo aligning ComfyUI validation with the AMD `frameworks-qa-ci`
 fleet, built against the **real** fleet repo (not a description). Local only —
 **not pushed, no remote**. Suite self-check: 8 unit tests pass.
 
+> Just pulled this and want to run tests? See **[GETTING_STARTED.md](GETTING_STARTED.md)**
+> for a step-by-step walkthrough, or [README.md](README.md) for the reference. This
+> file is the migration/hand-off checklist for wiring the suite into the fleet.
+
 ## Built to the real fleet conventions
 
 Aligned by reading the actual frameworks-qa-ci repo:
@@ -62,7 +66,4 @@ the fleet result shape:
    ≠ GPU-validated.)
 
 ## Guarantees
-- Ported executor behavior preserved; paths retargeted to the suite layout only.
-- No fabricated data — unmeasured metrics omitted/null.
-- All network/credentialed actions stubbed behind dry-run.
-- Manifest authoritative; `models_config.yaml` derived with a drift guard.
+- Ported executor
