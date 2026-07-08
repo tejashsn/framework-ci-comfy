@@ -9,6 +9,10 @@ the results in a standard format the AMD `frameworks-qa-ci` fleet understands.
 If you just want to answer *"does model X actually generate a picture on this AMD
 GPU, and how fast?"* — that's what this does.
 
+> 🚀 **New here / just pulled this onto a server?** Start with
+> **[GETTING_STARTED.md](GETTING_STARTED.md)** — a step-by-step, no-background-needed
+> walkthrough from "I just cloned this" to "I have test results."
+
 ---
 
 ## The 30-second mental model
@@ -101,8 +105,4 @@ Everything lands under the `--results-dir` you pass (e.g. `~/results`):
 ~/results/
 ├── results_<test>.json               ← THE SCORE for each test (see below)
 ├── benchmark_summary.json            ← roll-up: PASS/FAIL/SKIP counts, GPU, git commit
-└── <test>_<timestamp>/               ← evidence folder for that test
-    └── <test>_<timestamp>/
-        ├── summary.json              verdict + reason + duration
-        ├── results.json              raw latency numbers
-        ├── pr
+└── <test>_<timestamp>/               ← 
