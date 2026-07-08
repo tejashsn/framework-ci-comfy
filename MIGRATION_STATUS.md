@@ -41,13 +41,23 @@ the fleet result shape:
 - Per-test ComfyUI server-log capture on every non-PASS.
 - Frozen exit codes 0=PASS/1=FAIL/2=SKIP/3=INFRA_ERROR.
 
+## Stubbed / fixed in review pass (2026-07-08)
+
+| Item | Status |
+|---|---|
+| RASTRA POST | **Fixed** — `upload_from_artifacts.py` uses fleet `api.py` + `ResultsAPI.submit_results()` |
+| Payload validation | **Fixed** — vendored `payload_schema.json` + `jsonschema` validate before POST |
+| Consolidator | **Fixed** — `scripts/consolidate_artifacts.py` replaces broken `config_consolidator` + wrong YAML |
+| Composite actions | Still fleet-only — see `INTEGRATION.md` |
+| `workflow_call` | **Added** on `comfyui-ci.yml` |
+
 ## Stubbed (intentionally — wire manually)
 
 | Stub | Where | Activate |
 |---|---|---|
-| RASTRA POST | `tests/utils/results/handler.py` (`upload_results`, dry_run=True) | implement `requests.post(api_url, json=payload, headers={'Authorization': api_key})`; set API_URL/API_KEY. Payload shape already correct. |
-| Composite actions | `.github/workflows/comfyui-ci.yml` (`uses: ./.github/actions/*`) | these live in frameworks-qa-ci. Drop this suite into that repo, or copy the actions here. |
-| Consolidator | `tests.utils.consolidation.config_consolidator` (referenced in consolidate job) | provided by the fleet; not vendored here. |
+| RASTRA POST | `tests/utils/results/api.py` + `upload_from_artifacts.py` | set `API_URL`/`API_KEY`; workflow `upload_results: true` |
+| Composite actions | `.github/workflows/comfyui-ci.yml` (`uses: ./.github/actions/*`) | fleet repo only unless you vendor actions (see `INTEGRATION.md`) |
+| Consolidator | `scripts/consolidate_artifacts.py` | suite-local; do not point at fleet `config_consolidator` without rewriting `consolidation.yaml` |
 | GPU telemetry | benchmark metrics beyond latency (vram/throughput) | optional; add rocm-smi capture like the fleet's `rocm_gpuwrap.py`. |
 
 ## Manual steps left for you (ordered)

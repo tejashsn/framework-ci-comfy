@@ -131,28 +131,41 @@ def test_skip_and_infra_map_to_result_status(tmp_path):
 # results handler payload shape
 # --------------------------------------------------------------------------- #
 def test_handler_builds_fleet_payload(tmp_path):
-    from tests.utils.results import handler
+    sys.path.insert(0, str(SUITE / "scripts"))
+    import upload_from_artifacts
+    from tests.utils.results import validate_payload
+
     rd = tmp_path / "logs" / "benchmark_results"
     rd.mkdir(parents=True)
+    (tmp_path / "logs" / "bm_config.json").write_text(json.dumps({
+        "os": "Ubuntu 24.04",
+        "os_version": "24.04",
+        "kernel": "6.8.0",
+        "hostname": "test-host",
+        "system_ip": "127.0.0.1",
+        "cpu": {"model": "Test CPU", "cores": 64, "sockets": 1, "ram_size": 512},
+        "gpu": {"count": 8, "name": "gfx942", "marketing_name": "MI300X"},
+        "rocm_version": "7.15.0",
+    }))
     (rd / "results_t.json").write_text(json.dumps({"results": [{
-        "test_config": {"test_name": "comfyui_x"}, "test_metrics": [],
+        "test_config": {"test_name": "comfyui_x", "sub_test_name": "comfyui_x"}, "test_metrics": [],
         "test_result": "PASS", "result_status": "PASS",
         "test_execution_time": 1.0, "test_start_time": "2026-01-01T00:00:00Z",
     }]}))
-    payload = handler.upload_results(str(rd), execution_label="sqa-nightly",
-                                     logs_dir=str(tmp_path / "logs"),
-                                     out_path=str(tmp_path / "payload.json"),
-                                     dry_run=True)
-    # fleet top-level keys
+    payload, _ = upload_from_artifacts.build_payload_from_dir(
+        rd, execution_label="sqa-nightly", logs_dir=tmp_path / "logs"
+    )
     for k in ("test_environment", "bm_config", "deployment_info",
               "docker_config", "results", "test_app_commit", "test_app_version"):
         assert k in payload
     assert payload["deployment_info"]["execution_label"] == "sqa-nightly"
-    assert payload["framework"] == "comfyui"
-    assert (tmp_path / "payload.json").exists()   # dry-run wrote preview
+    assert validate_payload(payload)
+    out = tmp_path / "payload.json"
+    upload_from_artifacts.save_payload(payload, out)
+    assert out.exists()
 
 
 def test_framework_detection():
-    from tests.utils.results import handler
-    assert handler._derive_framework("comfyui_stable_diffusion_2_1") == "comfyui"
-    assert handler._derive_framework("vllm_serving_x") == "vllm"
+    from tests.utils.results.handler import _derive_framework
+    assert _derive_framework("comfyui_stable_diffusion_2_1") == "comfyui"
+    assert _derive_framework("vllm_serving_x") == "vllm"

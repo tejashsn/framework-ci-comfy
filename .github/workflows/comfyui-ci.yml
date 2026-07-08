@@ -48,6 +48,42 @@ on:
         type: boolean
         default: true
 
+  workflow_call:
+    inputs:
+      model_names:
+        type: string
+        default: 'P0'
+      runner_label:
+        type: string
+        default: 'self-hosted'
+      docker_image:
+        type: string
+        default: 'rocm/pytorch:latest'
+      rocm_version:
+        type: string
+        default: ''
+      comfyui_url:
+        type: string
+        default: 'http://127.0.0.1:8188'
+      execution_label:
+        type: string
+        default: 'manual'
+      upload_results:
+        type: boolean
+        default: false
+      upload_to_artifactory:
+        type: boolean
+        default: true
+    secrets:
+      RASTRA_API_KEY:
+        required: false
+      ARTIFACTORY_USER:
+        required: false
+      ARTIFACTORY_PASSWORD:
+        required: false
+      HF_TOKEN:
+        required: false
+
 permissions:
   contents: read
 
@@ -175,7 +211,7 @@ jobs:
         run: python3 tests/src/inference/comfyui/scripts/generate_summary.py --mode github
 
       - name: Upload results to database
-        if: always() && needs.setup.outputs.upload_results == 'true'
+        if: always() && inputs.upload_results
         env:
           API_URL: ${{ vars.RASTRA_API_URL }}
           API_KEY: ${{ secrets.RASTRA_API_KEY }}
@@ -231,10 +267,20 @@ jobs:
           pattern: results__*
       - name: Consolidate results
         run: |
-          python3 -m tests.utils.consolidation.config_consolidator \
-            --config tests/src/inference/comfyui/config/consolidation.yaml \
+          python3 tests/src/inference/comfyui/scripts/consolidate_artifacts.py \
             --results-dir all_results \
+            --output results_summary.md \
             --fail-on-error || echo "consolidation reported failures"
+      - name: RASTRA link
+        if: always()
+        run: |
+          PAYLOAD=$(find all_results logs -name "payload.json" -type f 2>/dev/null | head -1)
+          if [ -n "$PAYLOAD" ]; then
+            python3 tests/utils/results/rastra_link.py \
+              --from-payload "$PAYLOAD" \
+              --append-summary \
+              --title "View Results in RASTRA Dashboard" || true
+          fi
       - name: Add to summary
         if: always()
         run: |
