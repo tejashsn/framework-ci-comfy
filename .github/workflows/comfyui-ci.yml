@@ -359,6 +359,8 @@ jobs:
           RUNNER_HOSTNAME: ${{ env.RUNNER_HOST }}
           GITHUB_ACTOR: ${{ github.actor }}
           COMFYUI_MODEL_NAME: ${{ matrix.model }}
+          BENCHMARK_EXIT_CODE: ${{ env.BENCHMARK_EXIT_CODE }}
+          ROCM_VERSION: ${{ steps.rocm_detect.outputs.rocm_version }}
         run: |
           pip install -q requests jsonschema packaging pyyaml
           python3 tests/src/inference/comfyui/scripts/upload_from_artifacts.py \
@@ -372,7 +374,7 @@ jobs:
         with:
           source_path: logs/
           framework: comfyui
-          test_name: comfyui_${{ env.MODEL_SLUG }}
+          test_name: ${{ matrix.model }}
           artifactory_user: ${{ secrets.ARTIFACTORY_USER }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           enabled: ${{ env.UPLOAD_TO_ARTIFACTORY }}

@@ -149,6 +149,59 @@ def collect_test_results(results_dir: Path, env_deps: list) -> list:
     return test_results
 
 
+def _apply_artifactory_log_url(test_results: list) -> None:
+    """Point every row's log_path at the Artifactory folder.
+
+    Single source of truth: build_artifactory_info writes logs/artifactory_path.txt;
+    the Upload-to-Artifactory step reads the same file so DB and artifact URLs match.
+    Mirrors tests/src/inference/vllm/scripts/upload_from_artifacts.py."""
+    if not test_results:
+        return
+    test_name = (
+        test_results[0]["test_config"].get("test_name", "")
+        or os.environ.get("COMFYUI_MODEL_NAME", "")
+    )
+    try:
+        url = build_artifactory_info(test_name=test_name, framework="comfyui")
+    except Exception as e:  # never block upload on URL construction
+        print(f"Warning: could not build Artifactory URL: {e}")
+        return
+    if url:
+        print(f"Artifactory log URL: {url}")
+        for entry in test_results:
+            entry["log_path"] = url
+
+
+def build_failure_result(model_name: str, env_deps: list) -> dict:
+    """Build a single FAIL row when the benchmark produced no parseable results."""
+    test_name = model_name or os.environ.get("COMFYUI_MODEL_NAME", "comfyui_unknown")
+    return {
+        "success": False,
+        "duration": 0,
+        "start_time": datetime.now().isoformat(),
+        "log_path": os.environ.get("ARTIFACT_URL", ""),
+        "test_config": {
+            "test_name": test_name,
+            "sub_test_name": test_name,
+            "python_version": (
+                f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+            ),
+            "environment_dependencies": env_deps,
+            "metric": "latency",
+            "test_domain": "ml",
+            "result_status": "INFRA_ERROR",
+        },
+        "metrics": [],
+    }
+
+
+def _int_or(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _build_payload_framework(test_results: list, bm_config: dict, container_info: dict) -> dict:
     docker_info = (
         ResultsHandler.build_docker_info_dict(container_info=container_info)
@@ -197,19 +250,14 @@ def build_payload_from_dir(
 
     env_deps = container_info.get("environment_dependencies", []) if container_info else []
     test_results = collect_test_results(results_dir, env_deps=env_deps)
-    if not test_results:
-        raise ValueError(f"No results_*.json found under {results_dir}")
 
-    if _HAVE_FRAMEWORK:
-        first_test_name = test_results[0]["test_config"].get("test_name", "")
-        try:
-            artifactory_url = build_artifactory_info(test_name=first_test_name, framework="comfyui")
-        except Exception as e:
-            print(f"Warning: could not build Artifactory URL: {e}")
-            artifactory_url = ""
-        if artifactory_url:
-            for entry in test_results:
-                entry["log_path"] = artifactory_url
+    if not test_results:
+        benchmark_exit = _int_or(os.environ.get("BENCHMARK_EXIT_CODE"), 0)
+        if benchmark_exit == 0:
+            raise ValueError(f"No results_*.json found under {results_dir}")
+        model_name = os.environ.get("COMFYUI_MODEL_NAME", "")
+        print(f"⚠ Benchmark failed (exit {benchmark_exit}) with no results; uploading a FAIL row.")
+        test_results = [build_failure_result(model_name, env_deps)]
 
     if execution_label:
         os.environ.setdefault("EXECUTION_LABEL", execution_label)
@@ -217,6 +265,7 @@ def build_payload_from_dir(
     if not _HAVE_FRAMEWORK:
         raise RuntimeError(f"Results stack unavailable: {_FRAMEWORK_IMPORT_ERR}")
 
+    _apply_artifactory_log_url(test_results)
     payload = _build_payload_framework(test_results, bm_config, container_info)
     if not validate_payload(payload):
         raise ValueError("Payload validation failed (see logs/failed_payload.json if written)")

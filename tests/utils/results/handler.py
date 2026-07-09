@@ -186,6 +186,7 @@ def _derive_framework(test_name: str) -> str:
     env_hints = {
         "VLLM_MODEL_NAME": "vllm",
         "XDIT_MODEL_NAME": "xdit",
+        "COMFYUI_MODEL_NAME": "comfyui",
         "MAD_MODEL": "mad",
         "FUNCTIONAL_CONFIG": None,  # checked below
     }

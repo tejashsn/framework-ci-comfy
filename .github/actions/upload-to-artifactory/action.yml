@@ -1,50 +1,117 @@
-name: Upload to Artifactory
-description: >
-  Upload logs/ to Artifactory at the path in logs/artifactory_path.txt
-  (written by build_artifactory_info). Mirrors the frameworks-qa-ci action.
+# Composite action to upload test results/logs to JFrog Artifactory
+#
+# The upload path is auto-detected from logs/artifactory_path.txt written
+# by upload_from_artifacts.py via build_artifactory_info(). This ensures
+# the DB URL and the actual upload path always match (vLLM / fleet pattern).
+#
+# Requires GitHub Secrets:
+#   ARTIFACTORY_USER     - Artifactory service account username
+#   ARTIFACTORY_PASSWORD - Artifactory service account password
+
+name: 'Upload to Artifactory'
+description: 'Upload test results and logs to JFrog Artifactory with structured path'
 
 inputs:
   source_path:
-    description: Local directory to upload (e.g. logs/)
+    description: 'Directory to upload (e.g., logs/)'
     required: true
-  framework:
-    description: Framework name for path generation if artifactory_path.txt is missing
-    required: false
-    default: comfyui
-  test_name:
-    description: Test name for path generation if artifactory_path.txt is missing
-    required: false
-    default: ''
-  logs_dir:
-    description: Directory containing artifactory_path.txt (default logs/)
-    required: false
-    default: 'logs'
   artifactory_user:
-    description: Artifactory username (falls back to ARTIFACTORY_USER env)
+    description: 'Artifactory username (from secrets)'
     required: false
     default: ''
   artifactory_password:
-    description: Artifactory password (falls back to ARTIFACTORY_PASSWORD env)
+    description: 'Artifactory password (from secrets)'
     required: false
     default: ''
+  framework:
+    description: 'Framework name (fallback if artifactory_path.txt missing)'
+    required: false
+    default: 'comfyui'
+  test_name:
+    description: 'Test identifier (fallback if artifactory_path.txt missing)'
+    required: false
+    default: ''
+  logs_dir:
+    description: 'Directory containing artifactory_path.txt'
+    required: false
+    default: 'logs'
   enabled:
-    description: Set to false to skip upload
+    description: 'Enable upload (true/false). Set false to skip.'
     required: false
     default: 'true'
 
+outputs:
+  artifactory_url:
+    description: 'Full Artifactory URL where results were uploaded'
+    value: ${{ steps.upload.outputs.artifactory_url }}
+  uploaded:
+    description: 'Whether upload actually happened (true/false)'
+    value: ${{ steps.upload.outputs.uploaded }}
+
 runs:
-  using: composite
+  using: 'composite'
   steps:
-    - name: Upload logs to Artifactory
+    - name: Upload to Artifactory
+      id: upload
       if: inputs.enabled == 'true'
       shell: bash
       env:
         ARTIFACTORY_USER: ${{ inputs.artifactory_user }}
         ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
       run: |
-        set -euo pipefail
+        if [ "${{ inputs.enabled }}" != "true" ]; then
+          echo "Artifactory upload disabled, skipping"
+          echo "uploaded=false" >> "$GITHUB_OUTPUT"
+          echo "artifactory_url=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [ -z "${{ inputs.artifactory_user }}" ] || [ -z "${{ inputs.artifactory_password }}" ]; then
+          echo "::warning::Artifactory credentials not configured, skipping upload"
+          echo "uploaded=false" >> "$GITHUB_OUTPUT"
+          echo "artifactory_url=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "::add-mask::${{ inputs.artifactory_password }}"
+
+        FW_ARG=""
+        if [ -n "${{ inputs.framework }}" ]; then
+          FW_ARG="--framework ${{ inputs.framework }}"
+        fi
+        TN_ARG=""
+        if [ -n "${{ inputs.test_name }}" ]; then
+          TN_ARG="--test-name ${{ inputs.test_name }}"
+        fi
+
+        set +e
         python3 scripts/upload_to_artifactory.py \
           --source-path "${{ inputs.source_path }}" \
           --logs-dir "${{ inputs.logs_dir }}" \
-          --framework "${{ inputs.framework }}" \
-          --test-name "${{ inputs.test_name }}"
+          --user "${{ inputs.artifactory_user }}" \
+          --password "${{ inputs.artifactory_password }}" \
+          $FW_ARG $TN_ARG
+        UPLOAD_EXIT=$?
+        set -e
+
+        ART_PATH=""
+        if [ -f "${{ inputs.logs_dir }}/artifactory_path.txt" ]; then
+          ART_PATH=$(tr -d ' \n' < "${{ inputs.logs_dir }}/artifactory_path.txt")
+        fi
+        if [ -n "$ART_PATH" ]; then
+          BASE="${ARTIFACTORY_BASE_URL:-https://compute-artifactory.amd.com}"
+          ART_URL="${BASE}${ART_PATH}"
+          echo "artifactory_url=$ART_URL" >> "$GITHUB_OUTPUT"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Artifactory Logs" >> "$GITHUB_STEP_SUMMARY"
+          echo "[View uploaded logs]($ART_URL)" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "artifactory_url=" >> "$GITHUB_OUTPUT"
+        fi
+
+        if [ "$UPLOAD_EXIT" -eq 0 ]; then
+          echo "uploaded=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::Artifactory upload failed (exit code: $UPLOAD_EXIT)"
+          echo "uploaded=false" >> "$GITHUB_OUTPUT"
+        fi
