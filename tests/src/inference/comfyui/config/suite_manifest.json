@@ -12,14 +12,6 @@
       "workflow": "workflows/sdxl_base_1.0.json",
       "timeout_minutes": 20,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1030",
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx908"
-      ],
       "os": [
         "linux",
         "windows"
@@ -48,14 +40,6 @@
       "workflow": "workflows/sd2_1.json",
       "timeout_minutes": 15,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1030",
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx908"
-      ],
       "os": [
         "linux",
         "windows"
@@ -84,14 +68,6 @@
       "workflow": "workflows/sd3_medium_fp16.json",
       "timeout_minutes": 25,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a",
-        "gfx908"
-      ],
       "os": [
         "linux",
         "windows"
@@ -123,13 +99,6 @@
         "gfx1153": 60
       },
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -160,12 +129,6 @@
         "gfx1153": 20
       },
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -196,13 +159,6 @@
         "gfx1153": 75
       },
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -233,13 +189,6 @@
         "gfx1153": 70
       },
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -268,13 +217,6 @@
       "workflow": "workflows/flux1_dev.json",
       "timeout_minutes": 35,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -305,13 +247,6 @@
         "gfx1153": 300
       },
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -338,13 +273,6 @@
       "workflow": "workflows/flux1_schnell.json",
       "timeout_minutes": 25,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -372,13 +300,6 @@
       "workflow": "workflows/chroma.json",
       "timeout_minutes": 30,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -409,13 +330,6 @@
         "gfx1153": 55
       },
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -444,13 +358,6 @@
       "workflow": "workflows/z_image_turbo.json",
       "timeout_minutes": 30,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1030",
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153"
-      ],
       "os": [
         "linux",
         "windows"
@@ -479,13 +386,6 @@
       "timeout_minutes": 15,
       "enabled": false,
       "disabled_reason": "No Kokoro TTS model/node installed on this box - kept as honest SKIP, not a fake-green placeholder",
-      "gpu_arch": [
-        "gfx1030",
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -515,14 +415,6 @@
       "workflow": "workflows/ltx_t2v.json",
       "timeout_minutes": 45,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a",
-        "gfx908"
-      ],
       "os": [
         "linux",
         "windows"
@@ -550,14 +442,6 @@
       "workflow": "workflows/ltx_i2v.json",
       "timeout_minutes": 45,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a",
-        "gfx908"
-      ],
       "os": [
         "linux",
         "windows"
@@ -586,14 +470,6 @@
       "workflow": "workflows/ltx_pixelart.json",
       "timeout_minutes": 40,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a",
-        "gfx908"
-      ],
       "os": [
         "linux",
         "windows"
@@ -622,13 +498,6 @@
       "workflow": "workflows/wan2.2_5b_t2v.json",
       "timeout_minutes": 60,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -657,13 +526,6 @@
       "workflow": "workflows/wan2.2_5b_i2v.json",
       "timeout_minutes": 60,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -693,11 +555,6 @@
       "workflow": "workflows/wan2.2_14b_t2v.json",
       "timeout_minutes": 90,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1150",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -726,11 +583,6 @@
       "workflow": "workflows/wan2.2_14b_i2v.json",
       "timeout_minutes": 90,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1150",
-        "gfx90a"
-      ],
       "os": [
         "linux",
         "windows"
@@ -760,12 +612,6 @@
       "workflow": "workflows/wan2.2_lightning_t2v_a14b_4steps_lora_high_fp16.json",
       "timeout_minutes": 45,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153"
-      ],
       "os": [
         "linux",
         "windows"
@@ -795,12 +641,6 @@
       "workflow": "workflows/wan2.2_i2v_a14b_fp8_e4m3_lightx2v.json",
       "timeout_minutes": 45,
       "enabled": true,
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx1150",
-        "gfx1153"
-      ],
       "os": [
         "linux",
         "windows"
@@ -832,11 +672,6 @@
       "timeout_minutes": 60,
       "enabled": false,
       "disabled_reason": "No input audio available for InfiniteTalk on this box - kept as honest SKIP, not a fake-green placeholder",
-      "gpu_arch": [
-        "gfx1100",
-        "gfx1101",
-        "gfx90a"
-      ],
       "os": [
         "linux"
       ],

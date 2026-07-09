@@ -1,16 +1,11 @@
 # ComfyUI validation suite config (framework-ci suite style).
 # DERIVED from config/suite_manifest.json via scripts/create_config.py.
 # The manifest stays authoritative; this is the fleet-facing view.
-# Priorities group tests for P0/P1 selection (P0 = smoke/regression).
-priorities:
-  P0: ["comfyui_stable_diffusion_xl_base_1.0", "comfyui_stable_diffusion_2_1"]
-  P1: ["comfyui_sd3_medium_fp16", "comfyui_qwen_image_2512", "comfyui_wan2.2_lightning_t2v_a14b_4steps_lora_high_fp16", "comfyui_wan2.2_i2v_a14b_fp8_e4m3_lightx2v"]
-
+# CI selects tests by comma-separated test_name list (fleet workflow_id style).
 tests:
   - name: "comfyui_stable_diffusion_xl_base_1.0"
     tms_key: "1002335"
     tags: ["smoke", "sdxl", "regression"]
-    gpu_arch: ["gfx1030", "gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx908"]
     os: ["linux", "windows"]
     timeout_minutes: 20
     expected_output_type: "image"
@@ -19,7 +14,6 @@ tests:
   - name: "comfyui_stable_diffusion_2_1"
     tms_key: "1002321"
     tags: ["smoke", "sd2", "regression"]
-    gpu_arch: ["gfx1030", "gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx908"]
     os: ["linux", "windows"]
     timeout_minutes: 15
     expected_output_type: "image"
@@ -28,7 +22,6 @@ tests:
   - name: "comfyui_sd3_medium_fp16"
     tms_key: "1002783"
     tags: ["sd3", "fp16", "regression"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a", "gfx908"]
     os: ["linux", "windows"]
     timeout_minutes: 25
     expected_output_type: "image"
@@ -37,7 +30,6 @@ tests:
   - name: "comfyui_sd3.5_simple"
     tms_key: "1002265"
     tags: ["sd3.5", "func"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 25
     expected_output_type: "image"
@@ -46,7 +38,6 @@ tests:
   - name: "comfyui_sd3.5_large_canny_controlnet"
     tms_key: "1002195"
     tags: ["sd3.5", "controlnet"]
-    gpu_arch: ["gfx1100", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 40
     expected_output_type: "image"
@@ -55,7 +46,6 @@ tests:
   - name: "comfyui_stable_diffusion_3.5_medium"
     tms_key: "1002319"
     tags: ["sd3.5", "medium"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 30
     expected_output_type: "image"
@@ -64,7 +54,6 @@ tests:
   - name: "comfyui_sd3.5_medium"
     tms_key: "1002211"
     tags: ["sd3.5", "medium", "tms-1002211"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 30
     expected_output_type: "image"
@@ -73,7 +62,6 @@ tests:
   - name: "comfyui_flux1_dev"
     tms_key: "1002213"
     tags: ["flux", "regression"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 35
     expected_output_type: "image"
@@ -82,7 +70,6 @@ tests:
   - name: "comfyui_flux2_dev"
     tms_key: "1002194"
     tags: ["flux2"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 35
     expected_output_type: "image"
@@ -91,7 +78,6 @@ tests:
   - name: "comfyui_flux1_schnell"
     tms_key: "1002214"
     tags: ["flux", "schnell"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 25
     expected_output_type: "image"
@@ -100,7 +86,6 @@ tests:
   - name: "comfyui_chroma"
     tms_key: "1002264"
     tags: ["func", "chroma"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 30
     expected_output_type: "image"
@@ -109,7 +94,6 @@ tests:
   - name: "comfyui_qwen_image_2512"
     tms_key: "1002318"
     tags: ["qwen", "vlm", "regression"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 30
     expected_output_type: "image"
@@ -118,7 +102,6 @@ tests:
   - name: "comfyui_z_image_turbo"
     tms_key: "1002212"
     tags: ["turbo", "fast"]
-    gpu_arch: ["gfx1030", "gfx1100", "gfx1101", "gfx1150", "gfx1153"]
     os: ["linux", "windows"]
     timeout_minutes: 30
     expected_output_type: "image"
@@ -127,7 +110,6 @@ tests:
   - name: "comfyui_kokoro_82m"
     tms_key: "1002324"
     tags: ["tts", "audio", "smoke", "regression"]
-    gpu_arch: ["gfx1030", "gfx1100", "gfx1101", "gfx1150", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 15
     expected_output_type: "audio"
@@ -136,7 +118,6 @@ tests:
   - name: "comfyui_ltx_T2V"
     tms_key: "1002118"
     tags: ["video", "ltx"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a", "gfx908"]
     os: ["linux", "windows"]
     timeout_minutes: 45
     expected_output_type: "video"
@@ -145,7 +126,6 @@ tests:
   - name: "comfyui_ltx_I2V"
     tms_key: "1002119"
     tags: ["video", "ltx", "i2v"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a", "gfx908"]
     os: ["linux", "windows"]
     timeout_minutes: 45
     expected_output_type: "video"
@@ -154,7 +134,6 @@ tests:
   - name: "comfyui_ltx_pixelart"
     tms_key: "1002120"
     tags: ["video", "ltx", "style"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a", "gfx908"]
     os: ["linux", "windows"]
     timeout_minutes: 40
     expected_output_type: "video"
@@ -163,7 +142,6 @@ tests:
   - name: "comfyui_wan2.2_5B_T2V"
     tms_key: "1002116"
     tags: ["video", "wan", "5b"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 60
     expected_output_type: "video"
@@ -172,7 +150,6 @@ tests:
   - name: "comfyui_wan2.2_5B_I2V"
     tms_key: "1002117"
     tags: ["video", "wan", "5b", "i2v"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 60
     expected_output_type: "video"
@@ -181,7 +158,6 @@ tests:
   - name: "comfyui_wan2.2_14B_T2V"
     tms_key: "1002114"
     tags: ["video", "wan", "14b"]
-    gpu_arch: ["gfx1100", "gfx1150", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 90
     expected_output_type: "video"
@@ -190,7 +166,6 @@ tests:
   - name: "comfyui_wan2.2_14B_I2V"
     tms_key: "1002115"
     tags: ["video", "wan", "14b", "i2v"]
-    gpu_arch: ["gfx1100", "gfx1150", "gfx90a"]
     os: ["linux", "windows"]
     timeout_minutes: 90
     expected_output_type: "video"
@@ -199,7 +174,6 @@ tests:
   - name: "comfyui_wan2.2_lightning_t2v_a14b_4steps_lora_high_fp16"
     tms_key: "1002337"
     tags: ["video", "wan", "lightning", "automated"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153"]
     os: ["linux", "windows"]
     timeout_minutes: 45
     expected_output_type: "video"
@@ -208,7 +182,6 @@ tests:
   - name: "comfyui_wan2.2_i2v_a14b_fp8_e4m3_lightx2v"
     tms_key: "1002338"
     tags: ["video", "wan", "fp8", "i2v", "automated"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx1150", "gfx1153"]
     os: ["linux", "windows"]
     timeout_minutes: 45
     expected_output_type: "video"
@@ -217,7 +190,6 @@ tests:
   - name: "comfyui_wan_infinitetalk"
     tms_key: "1002121"
     tags: ["video", "wan", "talking-head"]
-    gpu_arch: ["gfx1100", "gfx1101", "gfx90a"]
     os: ["linux"]
     timeout_minutes: 60
     expected_output_type: "video"

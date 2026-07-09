@@ -4,8 +4,8 @@
 Mirrors the xDiT/vLLM standalone pattern: one script, no BaseTest, that CI and a
 bare node both invoke the same way. It does four things:
 
-  1. Resolve which ComfyUI tests to run for this GPU arch (from config/
-     models_config.yaml, filtered by --model/--tags/--arch).
+  1. Resolve which ComfyUI tests to run (from config/models_config.yaml,
+     filtered by --model/--tags; GPU arch does not gate selection).
   2. Drive each test through the hardened ComfyUI executor
      (executors/comfyui_validator.py -> single_test_protocol.py), which talks to
      a running ComfyUI over its HTTP API on real GPU hardware.
@@ -95,9 +95,9 @@ def load_manifest(path):
 
 
 def select_tests(models_cfg, manifest, *, model, tags, arch, os_family):
-    """Pick tests from models_config.yaml, cross-checked against the manifest for
-    arch/os eligibility. Selection precedence: explicit --model > --tags > all
-    enabled. arch/os filters always apply."""
+    """Pick tests from models_config.yaml, cross-checked against the manifest.
+    Selection precedence: explicit --model > --tags > all enabled.
+    GPU arch is not used for filtering (any arch may run any test)."""
     by_name = {t["test_name"]: t for t in manifest.get("tests", [])}
     want_tags = {t.strip() for t in (tags or "").split(",") if t.strip()}
     selected = []
@@ -105,8 +105,6 @@ def select_tests(models_cfg, manifest, *, model, tags, arch, os_family):
         name = entry["name"]
         mt = by_name.get(name, {})
         if not mt.get("enabled", True):
-            continue
-        if arch and arch not in mt.get("gpu_arch", entry.get("gpu_arch", [])):
             continue
         if os_family and os_family not in mt.get("os", entry.get("os", [])):
             continue

@@ -16,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       model_names:
-        description: 'Test names (comma-separated) or P0/P1/ALL. Default: P0'
+        description: 'Comma-separated test names (manifest test_name values), e.g. comfyui_stable_diffusion_2_1,comfyui_flux1_dev'
         required: false
-        default: 'P0'
+        default: 'comfyui_stable_diffusion_2_1,comfyui_stable_diffusion_xl_base_1.0'
       runner_label:
         description: 'Runner labels (comma-separated for multi-arch, e.g., "gfx908,gfx942")'
         required: false
@@ -56,7 +56,7 @@ on:
     inputs:
       model_names:
         type: string
-        default: 'P0'
+        default: 'comfyui_stable_diffusion_2_1,comfyui_stable_diffusion_xl_base_1.0'
       runner_label:
         type: string
         default: 'self-hosted'
@@ -127,7 +127,7 @@ jobs:
           python3 tests/src/inference/comfyui/scripts/create_config.py \
             --parse-inputs \
             --trigger "${{ github.event_name }}" \
-            --models "${{ inputs.model_names || 'P0' }}" \
+            --models "${{ inputs.model_names || 'comfyui_stable_diffusion_2_1,comfyui_stable_diffusion_xl_base_1.0' }}" \
             --runner-label "${{ inputs.runner_label || 'self-hosted' }}" \
             --upload "${{ inputs.upload_results }}" \
             --config-file tests/src/inference/comfyui/config/models_config.yaml \
@@ -153,7 +153,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Models (${{ steps.parse.outputs.model_count }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Input:** \`${{ inputs.model_names || 'P0' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Input:** \`${{ inputs.model_names || 'comfyui_stable_diffusion_2_1,comfyui_stable_diffusion_xl_base_1.0' }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Selected Tests:**" >> $GITHUB_STEP_SUMMARY
           echo '${{ steps.parse.outputs.models }}' | python3 -c "import json,sys; [print(f'- \`{m}\`') for m in json.load(sys.stdin)]" >> $GITHUB_STEP_SUMMARY
@@ -274,31 +274,14 @@ jobs:
           runner_label: ${{ matrix.runner_label }}
           execution_mode: baremetal
 
-      - name: Check arch compatibility
-        id: arch_check
+      - name: Detect GPU arch
+        id: arch_detect
         run: |
           python3 tests/src/inference/comfyui/scripts/create_config.py \
-            --check-arch-only \
-            --model "${{ matrix.model }}" \
-            --config-file tests/src/inference/comfyui/config/models_config.yaml \
+            --detect-gpu-arch \
             --output-file "$GITHUB_OUTPUT"
 
-      - name: Skip - Arch not supported
-        if: steps.arch_check.outputs.supported == 'false'
-        run: |
-          echo "## ⏭️ SKIPPED - Not Supported" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Detail | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Test** | \`${{ matrix.model }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **GPU Arch** | \`${{ steps.arch_check.outputs.gpu_arch }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Reason** | ${{ steps.arch_check.outputs.skip_reason }} |" >> $GITHUB_STEP_SUMMARY
-          mkdir -p logs/benchmark_results
-          echo '{"status": "skipped", "reason": "${{ steps.arch_check.outputs.skip_reason }}", "model": "${{ matrix.model }}", "gpu_arch": "${{ steps.arch_check.outputs.gpu_arch }}"}' > logs/benchmark_results/skipped.json
-          echo "::warning::SKIPPED: ${{ matrix.model }} - ${{ steps.arch_check.outputs.skip_reason }}"
-
       - name: Run ComfyUI validation
-        if: steps.arch_check.outputs.supported == 'true'
         run: |
           set -euo pipefail
           mkdir -p logs/benchmark_results
@@ -319,7 +302,7 @@ jobs:
           "$PY" -m pip install -q -r requirements.txt
 
           ARCH_ARGS=()
-          GPU_ARCH='${{ steps.arch_check.outputs.gpu_arch }}'
+          GPU_ARCH='${{ steps.arch_detect.outputs.gpu_arch }}'
           if [ -z "$GPU_ARCH" ] || [ "$GPU_ARCH" = "unknown" ]; then
             GPU_ARCH="${INSTALLED_GFX_TARGET:-}"
           fi
@@ -360,7 +343,7 @@ jobs:
           COMFYUI_MODEL_NAME: ${{ matrix.model }}
 
       - name: Upload results to database
-        if: always() && steps.arch_check.outputs.supported == 'true' && needs.setup.outputs.upload_results == 'true'
+        if: always() && needs.setup.outputs.upload_results == 'true'
         env:
           API_URL: ${{ vars.RASTRA_API_URL }}
           API_KEY: ${{ secrets.RASTRA_API_KEY }}

@@ -8,7 +8,7 @@ Purpose  : Wraps single_test_protocol.py with the production CLI contract so
 Exit codes - IMMUTABLE, do not change:
   0  PASS
   1  FAIL
-  2  SKIP        (disabled, arch mismatch, os mismatch, skip-cache hit)
+  2  SKIP        (disabled, os mismatch, skip-cache hit)
   3  INFRA_ERROR (ComfyUI unreachable, GPU not visible, manifest missing)
 """
 
@@ -263,13 +263,6 @@ def main():
         print(f"[SKIP] {args.execute} is disabled in manifest.")
         write_gha_output("result", "SKIP")
         write_gha_output("skip_reason", "disabled")
-        sys.exit(2)
-
-    if args.gpu_arch not in test.get("gpu_arch", []):
-        print(f"[SKIP] {args.execute} does not support {args.gpu_arch}. "
-              f"Supported: {test['gpu_arch']}")
-        write_gha_output("result", "SKIP")
-        write_gha_output("skip_reason", f"gpu_arch_mismatch:{args.gpu_arch}")
         sys.exit(2)
 
     os_fam = os_family(args.os_version)

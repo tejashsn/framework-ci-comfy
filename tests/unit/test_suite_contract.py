@@ -42,6 +42,20 @@ def test_models_config_covers_every_manifest_test():
     assert cfg_names == man_names
 
 
+def test_expand_selection_requires_explicit_test_names():
+    import create_config
+    import yaml
+    cfg = yaml.safe_load((SUITE / "config" / "models_config.yaml").read_text())
+    with pytest.raises(ValueError, match="test_names required"):
+        create_config.expand_selection("", cfg)
+    with pytest.raises(ValueError, match="Unknown test name"):
+        create_config.expand_selection("comfyui_not_a_test", cfg)
+    selected = create_config.expand_selection(
+        "comfyui_stable_diffusion_2_1,comfyui_flux1_dev", cfg
+    )
+    assert selected == ["comfyui_stable_diffusion_2_1", "comfyui_flux1_dev"]
+
+
 # --------------------------------------------------------------------------- #
 # ported executors import under the new layout
 # --------------------------------------------------------------------------- #

@@ -172,7 +172,7 @@ def doctor_model_coverage(gpu_arch, repo_root=REPO_ROOT, comfy_path=None):
 
     if not comfy_path:
         for t in manifest.get("tests", []):
-            if not t.get("enabled", True) or gpu_arch not in t.get("gpu_arch", []):
+            if not t.get("enabled", True):
                 continue
             rows.append((t["test_name"], "UNKNOWN", "no ComfyUI path to check"))
         return {"status": "WARN", "rows": rows,
@@ -182,8 +182,6 @@ def doctor_model_coverage(gpu_arch, repo_root=REPO_ROOT, comfy_path=None):
     missing_total = 0
     for t in manifest.get("tests", []):
         if not t.get("enabled", True):
-            continue
-        if gpu_arch not in t.get("gpu_arch", []):
             continue
         name = t["test_name"]
         try:

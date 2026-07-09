@@ -6,7 +6,7 @@ Roles (mirroring vLLM/xDiT scripts of the same name):
 
   1. --regenerate : rebuild config/models_config.yaml FROM suite_manifest.json
   2. --parse-inputs : expand model selection + runner labels for CI setup job
-  3. --check-arch-only : decide whether a test supports the current GPU arch
+  3. --detect-gpu-arch : write detected GPU arch for CI (no arch gating)
 
 Also --check verifies models_config.yaml is in sync with the manifest.
 """
@@ -52,26 +52,16 @@ def load_models_config(path: Path | str | None = None) -> dict:
 
 def build_models_config_text(manifest):
     tests = manifest.get("tests", [])
-    p0 = [t["test_name"] for t in tests
-          if "smoke" in t.get("tags", []) and t.get("enabled", True)]
-    p1 = [t["test_name"] for t in tests
-          if t.get("automation") == "Automated" and t.get("enabled", True)
-          and t["test_name"] not in p0]
     L = []
     L.append("# ComfyUI validation suite config (framework-ci suite style).")
     L.append("# DERIVED from config/suite_manifest.json via scripts/create_config.py.")
     L.append("# The manifest stays authoritative; this is the fleet-facing view.")
-    L.append("# Priorities group tests for P0/P1 selection (P0 = smoke/regression).")
-    L.append("priorities:")
-    L.append("  P0: [" + ", ".join(f'"{n}"' for n in p0) + "]")
-    L.append("  P1: [" + ", ".join(f'"{n}"' for n in p1) + "]")
-    L.append("")
+    L.append("# CI selects tests by comma-separated test_name list (fleet workflow_id style).")
     L.append("tests:")
     for t in tests:
         L.append(f'  - name: "{t["test_name"]}"')
         L.append(f'    tms_key: {json.dumps(t.get("tms_key"))}')
         L.append(f'    tags: [{", ".join(chr(34)+x+chr(34) for x in t.get("tags", []))}]')
-        L.append(f'    gpu_arch: [{", ".join(chr(34)+x+chr(34) for x in t.get("gpu_arch", []))}]')
         L.append(f'    os: [{", ".join(chr(34)+x+chr(34) for x in t.get("os", []))}]')
         L.append(f'    timeout_minutes: {t.get("timeout_minutes")}')
         L.append(f'    expected_output_type: "{t.get("expected_output_type", "image")}"')
@@ -82,59 +72,42 @@ def build_models_config_text(manifest):
 
 
 def expand_selection(selection, models_cfg):
-    """Turn 'P0'/'P1'/'ALL' or comma-separated names into a list of test names."""
-    sel = (selection or "P0").strip()
-    prios = models_cfg.get("priorities", {})
-    if sel.upper() in ("P0", "P1", "P2"):
-        return list(prios.get(sel.upper(), []))
-    if sel.upper() == "ALL":
-        return [t["name"] for t in models_cfg.get("tests", [])
-                if t.get("enabled", True)]
-    return [s.strip() for s in sel.split(",") if s.strip()]
+    """Comma-separated test names (fleet workflow_id style)."""
+    sel = (selection or "").strip()
+    if not sel:
+        raise ValueError(
+            "test_names required: comma-separated manifest test_name values "
+            "(e.g. comfyui_stable_diffusion_2_1,comfyui_flux1_dev)"
+        )
+    names = [s.strip() for s in sel.split(",") if s.strip()]
+    known = {t["name"]: t for t in models_cfg.get("tests", [])}
+    unknown = [n for n in names if n not in known]
+    if unknown:
+        raise ValueError(f"Unknown test name(s): {unknown}")
+    disabled = [n for n in names if not known[n].get("enabled", True)]
+    if disabled:
+        raise ValueError(f"Disabled test(s) in manifest: {disabled}")
+    return names
 
 
-def lookup_test_config(test_name: str, models_cfg: dict) -> dict | None:
-    for t in models_cfg.get("tests", []):
-        if t.get("name") == test_name:
-            return t
-    return None
-
-
-def check_arch_compatibility(
-    test_name: str,
-    config_file: str,
-    output_file: str = "",
-) -> int:
-    """Check if test is compatible with current GPU architecture."""
+def detect_gpu_arch_for_ci(output_file: str = "") -> int:
+    """Detect GPU arch for CI metadata. Tests are not gated by architecture."""
     gpu_arch = detect_gpu_arch()
-    models_cfg = load_models_config(config_file)
-    test_cfg = lookup_test_config(test_name, models_cfg)
-    supported_arch = (test_cfg or {}).get("gpu_arch", [])
-
-    if supported_arch and gpu_arch not in supported_arch and gpu_arch != "unknown":
-        supported = "false"
-        skip_reason = f"Test requires {supported_arch}, current GPU is {gpu_arch}"
-        print(f"⏭️  {test_name} requires {supported_arch}, current GPU: {gpu_arch}")
-    else:
-        supported = "true"
-        skip_reason = ""
-        if supported_arch:
-            print(f"✓ {test_name} supports {gpu_arch} (allowed: {supported_arch})")
-        else:
-            print(f"✓ {test_name} has no arch filter (gpu={gpu_arch})")
-
+    print(f"Detected GPU arch: {gpu_arch or 'unknown'}")
     if output_file:
         with open(output_file, "a", encoding="utf-8") as f:
-            f.write(f"supported={supported}\n")
             f.write(f"gpu_arch={gpu_arch}\n")
-            f.write(f"skip_reason={skip_reason}\n")
     return 0
 
 
 def parse_inputs(args) -> int:
     """Expand models + runner labels for GitHub Actions matrix."""
     models_cfg = load_models_config(args.config_file)
-    selected = expand_selection(args.models, models_cfg)
+    try:
+        selected = expand_selection(args.models, models_cfg)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     labels = [x.strip() for x in (args.runner_label or "self-hosted").split(",") if x.strip()]
     if not labels:
         labels = ["self-hosted"]
@@ -172,10 +145,10 @@ def main():
                    help="Exit 1 if models_config.yaml is out of sync.")
     p.add_argument("--parse-inputs", action="store_true",
                    help="Expand --models into a CI matrix (writes $GITHUB_OUTPUT).")
-    p.add_argument("--check-arch-only", action="store_true",
-                   help="Only check arch compatibility and exit.")
-    p.add_argument("--models", default="P0")
-    p.add_argument("--model", default="", help="Test name for --check-arch-only")
+    p.add_argument("--detect-gpu-arch", action="store_true",
+                   help="Detect GPU arch and write gpu_arch= to --output-file.")
+    p.add_argument("--models", default="",
+                   help="Comma-separated test names for --parse-inputs")
     p.add_argument("--runner-label", default="self-hosted")
     p.add_argument("--trigger", default="workflow_dispatch")
     p.add_argument("--upload", default=None,
@@ -204,13 +177,10 @@ def main():
     if args.parse_inputs:
         sys.exit(parse_inputs(args))
 
-    if args.check_arch_only:
-        if not args.model:
-            print("Error: --model is required for --check-arch-only", file=sys.stderr)
-            sys.exit(1)
-        sys.exit(check_arch_compatibility(args.model, args.config_file, args.output_file or ""))
+    if args.detect_gpu_arch:
+        sys.exit(detect_gpu_arch_for_ci(args.output_file or ""))
 
-    p.error("choose one of --regenerate / --check / --parse-inputs / --check-arch-only")
+    p.error("choose one of --regenerate / --check / --parse-inputs / --detect-gpu-arch")
 
 
 if __name__ == "__main__":
