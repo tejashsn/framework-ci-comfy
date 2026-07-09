@@ -278,6 +278,43 @@ def run_once(base_url, prompt, timeout_s, poll_interval):
     return prompt_id, history, elapsed
 
 
+def prune_image_outputs_to_best_run(result, expected_type):
+    """For image perf runs with multiple timed iterations, delete all but the
+    fastest successful run's downloaded files. Latency stats are unchanged."""
+    if expected_type != "image":
+        return
+    ok_runs = [
+        r for r in result.get("runs", [])
+        if r.get("status") == "OK" and r.get("output_files")
+    ]
+    if len(ok_runs) <= 1:
+        return
+
+    best = min(ok_runs, key=lambda r: r["latency_s"])
+    keep = set(best.get("output_files", []))
+    for run in ok_runs:
+        run["output_kept"] = run is best
+        if run is best:
+            continue
+        for fp in run.get("output_files", []):
+            if fp in keep:
+                continue
+            try:
+                Path(fp).unlink(missing_ok=True)
+            except OSError as e:
+                result["errors"].append(f"prune_delete_error:{fp}:{e}")
+
+    result["output_files"] = sorted(keep)
+    result["best_run"] = best["run"]
+    result["best_run_latency_s"] = best["latency_s"]
+    removed = sum(
+        len([fp for fp in r.get("output_files", []) if fp not in keep])
+        for r in ok_runs if r is not best
+    )
+    print(f"[kept] run {best['run']} output ({best['latency_s']}s fastest); "
+          f"removed {removed} other image(s)")
+
+
 def main():
     args = parse_args()
     out_dir = Path(args.output_dir)
@@ -374,6 +411,9 @@ def main():
         result["latency_avg_s"] = round(sum(latencies) / len(latencies), 3)
         result["latency_min_s"] = round(min(latencies), 3)
         result["latency_max_s"] = round(max(latencies), 3)
+
+    prune_image_outputs_to_best_run(result, args.expected_type)
+    downloaded_files = result.get("output_files", downloaded_files)
 
     result["output_files"] = downloaded_files
     result["output_sanity_ok"] = sanity_check(downloaded_files, args.expected_type)

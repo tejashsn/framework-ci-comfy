@@ -1,14 +1,15 @@
-# ComfyUI Validation Workflow (framework-ci suite pattern)
+# ComfyUI Validation Workflow
+# Runs ComfyUI GPU validation on AMD GPUs via self-hosted runners
 #
-# Mirrors the fleet's vLLM/xDiT 4-job structure: setup -> benchmark -> consolidate
-# -> summary. Runs the ComfyUI validation suite on AMD GPUs via self-hosted
-# runners, in a ROCm container, and records results in the framework-ci shape.
+# Triggers:
+#   - Manual (workflow_dispatch): Full control via UI
+#   - workflow_call: Invoked by fleet orchestrators (MAD, nightly, etc.)
 #
-# The composite actions referenced here (provision-runtime, capture-host-info,
-# docker-pull/cleanup, upload-to-artifactory, upload-artifacts, fix-permissions)
-# are the FLEET's actions — this repo carries none of its own. To run inside the
-# frameworks-qa-ci repo, this file drops in unchanged. Standalone, wire the
-# actions or use comfyui_benchmark.py --docker-image directly.
+# Runner Label Controls Behavior:
+#   - Unique label (e.g., "node1")  → Runs on that specific node
+#   - Shared label (e.g., "gfx908") → Distributed across all nodes with that label
+#
+# Mirrors vllm-ci.yml / xdit-ci.yml: setup -> benchmark (matrix) -> consolidate -> summary.
 
 name: ComfyUI Validation
 
@@ -20,11 +21,11 @@ on:
         required: false
         default: 'P0'
       runner_label:
-        description: 'Runner labels (comma-separated), e.g. "gfx942,gfx950"'
+        description: 'Runner labels (comma-separated for multi-arch, e.g., "gfx908,gfx942")'
         required: false
         default: 'self-hosted'
       docker_image:
-        description: 'ComfyUI ROCm image'
+        description: 'ComfyUI ROCm base image'
         required: false
         default: 'rocm/pytorch:latest'
       rocm_version:
@@ -32,7 +33,7 @@ on:
         required: false
         default: ''
       comfyui_url:
-        description: 'ComfyUI server URL inside the container'
+        description: 'ComfyUI server URL (host or in-container)'
         required: false
         default: 'http://127.0.0.1:8188'
       execution_label:
@@ -42,11 +43,47 @@ on:
       upload_results:
         description: 'Upload results to database (RASTRA)'
         type: boolean
-        default: false
+        default: true
       upload_to_artifactory:
         description: 'Upload logs to Artifactory'
         type: boolean
         default: true
+
+  workflow_call:
+    inputs:
+      model_names:
+        type: string
+        default: 'P0'
+      runner_label:
+        type: string
+        default: 'self-hosted'
+      docker_image:
+        type: string
+        default: 'rocm/pytorch:latest'
+      rocm_version:
+        type: string
+        default: ''
+      comfyui_url:
+        type: string
+        default: 'http://127.0.0.1:8188'
+      execution_label:
+        type: string
+        required: true
+      upload_results:
+        type: boolean
+        default: true
+      upload_to_artifactory:
+        type: boolean
+        default: true
+    secrets:
+      HF_TOKEN:
+        required: false
+      RASTRA_API_KEY:
+        required: false
+      ARTIFACTORY_USER:
+        required: false
+      ARTIFACTORY_PASSWORD:
+        required: false
 
 permissions:
   contents: read
@@ -62,9 +99,20 @@ jobs:
     outputs:
       models: ${{ steps.parse.outputs.models }}
       model_count: ${{ steps.parse.outputs.model_count }}
+      trigger_type: ${{ steps.parse.outputs.trigger_type }}
       runner_labels: ${{ steps.parse.outputs.runner_labels }}
-      upload_results: ${{ inputs.upload_results }}
+      runner_label_count: ${{ steps.parse.outputs.runner_label_count }}
+      docker_image: ${{ steps.parse.outputs.docker_image }}
+      upload_results: ${{ steps.parse.outputs.upload_results }}
+
     steps:
+      - name: Fix permissions
+        run: |
+          chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE 2>/dev/null || \
+            sudo -n chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE 2>/dev/null || true
+          chmod -R u+rwX $GITHUB_WORKSPACE 2>/dev/null || \
+            sudo -n chmod -R u+rwX $GITHUB_WORKSPACE 2>/dev/null || true
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -73,22 +121,47 @@ jobs:
         run: |
           python3 tests/src/inference/comfyui/scripts/create_config.py \
             --parse-inputs \
+            --trigger "${{ github.event_name }}" \
             --models "${{ inputs.model_names || 'P0' }}" \
             --runner-label "${{ inputs.runner_label || 'self-hosted' }}" \
+            --docker-image "${{ inputs.docker_image || 'rocm/pytorch:latest' }}" \
+            --upload "${{ inputs.upload_results }}" \
             --config-file tests/src/inference/comfyui/config/models_config.yaml \
             --output-file "$GITHUB_OUTPUT"
 
       - name: Summary
         run: |
           echo "## ComfyUI Validation Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Trigger & Execution" >> $GITHUB_STEP_SUMMARY
           echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Selection | \`${{ inputs.model_names || 'P0' }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Runner labels | \`${{ steps.parse.outputs.runner_labels }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker image | \`${{ inputs.docker_image }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| ROCm | \`${{ inputs.rocm_version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Execution label | \`${{ inputs.execution_label || 'manual' }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Test count | ${{ steps.parse.outputs.model_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | \`${{ steps.parse.outputs.trigger_type }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Docker Image** | \`${{ steps.parse.outputs.docker_image }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Runner Labels** | \`${{ steps.parse.outputs.runner_labels }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **ComfyUI URL** | \`${{ inputs.comfyui_url || 'http://127.0.0.1:8188' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **ROCm Version** | \`${{ inputs.rocm_version || '(auto)' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Execution Label** | \`${{ inputs.execution_label || 'manual' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Upload to DB** | \`${{ steps.parse.outputs.upload_results }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Upload to Artifactory** | \`${{ inputs.upload_to_artifactory }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Total Jobs** | ${{ steps.parse.outputs.model_count }} tests × ${{ steps.parse.outputs.runner_label_count }} labels |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Models (${{ steps.parse.outputs.model_count }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Input:** \`${{ inputs.model_names || 'P0' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>Selection Keywords Reference</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Keyword | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| P0 | Smoke / regression (nightly, PR validation) |" >> $GITHUB_STEP_SUMMARY
+          echo "| P1 | Extended automated suite |" >> $GITHUB_STEP_SUMMARY
+          echo "| ALL | Every enabled test in config |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Selected Tests:**" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.parse.outputs.models }}' | python3 -c "import json,sys; [print(f'- \`{m}\`') for m in json.load(sys.stdin)]" >> $GITHUB_STEP_SUMMARY
 
   # ==================== BENCHMARK ====================
   benchmark:
@@ -96,58 +169,106 @@ jobs:
     needs: setup
     runs-on: [self-hosted, '${{ matrix.runner_label }}']
     timeout-minutes: 1080
+
     strategy:
       fail-fast: false
       matrix:
         model: ${{ fromJson(needs.setup.outputs.models) }}
         runner_label: ${{ fromJson(needs.setup.outputs.runner_labels) }}
+
     env:
+      GPU_FAMILY: ${{ vars.GPU_FAMILY || '' }}
       EXECUTION_LABEL: ${{ inputs.execution_label || github.event_name }}
       CI: true
       DATABASE_UPLOAD_RESULTS: ${{ needs.setup.outputs.upload_results }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       COMFYUI_MODEL_NAME: ${{ matrix.model }}
-      DOCKER_IMAGE: ${{ inputs.docker_image }}
+      DOCKER_IMAGE: ${{ needs.setup.outputs.docker_image }}
       UPLOAD_TO_ARTIFACTORY: ${{ inputs.upload_to_artifactory || false }}
       DOCKER_GPU_FLAGS: "--network=host --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --cap-add=SYS_PTRACE --security-opt seccomp=unconfined --shm-size=16g -v /sys:/sys:ro"
+
     steps:
       - name: Clean workspace
         run: |
           if [ -d "$GITHUB_WORKSPACE" ]; then
             chown -R $(id -u):$(id -g) "$GITHUB_WORKSPACE" 2>/dev/null || \
               sudo -n chown -R $(id -u):$(id -g) "$GITHUB_WORKSPACE" 2>/dev/null || true
+            chmod -R u+rwX "$GITHUB_WORKSPACE" 2>/dev/null || \
+              sudo -n chmod -R u+rwX "$GITHUB_WORKSPACE" 2>/dev/null || true
           fi
-          rm -rf $GITHUB_WORKSPACE/logs 2>/dev/null || true
+          rm -rf $GITHUB_WORKSPACE/logs $GITHUB_WORKSPACE/results 2>/dev/null || true
 
       - name: Checkout
         uses: actions/checkout@v4
 
-      # FLEET ACTION: provisions the ROCm container (or baremetal venv), captures
-      # host+container info. Standalone, comfyui_benchmark.py --docker-image does
-      # the equivalent container launch.
-      - name: Provision runtime
-        uses: ./.github/actions/provision-runtime
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-environment
         with:
-          execution_env: docker
-          docker_image: ${{ env.DOCKER_IMAGE }}
-          container_name: comfyui-${{ github.run_id }}
-          working_directory: .
+          python-version: '3.x'
+          gpu-family: ${{ vars.GPU_FAMILY || '' }}
+          execution-label: ${{ env.EXECUTION_LABEL }}
 
       - name: Capture host config
         uses: ./.github/actions/capture-host-info
 
+      - name: Job info
+        id: info
+        uses: ./.github/actions/job-info
+        with:
+          model: ${{ matrix.model }}
+          runner_label: ${{ matrix.runner_label }}
+          docker_image: ${{ env.DOCKER_IMAGE }}
+          execution_mode: docker
+
+      - name: Check arch compatibility
+        id: arch_check
+        run: |
+          python3 tests/src/inference/comfyui/scripts/create_config.py \
+            --check-arch-only \
+            --model "${{ matrix.model }}" \
+            --config-file tests/src/inference/comfyui/config/models_config.yaml \
+            --output-file "$GITHUB_OUTPUT"
+
+      - name: Skip - Arch not supported
+        if: steps.arch_check.outputs.supported == 'false'
+        run: |
+          echo "## ⏭️ SKIPPED - Not Supported" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Detail | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Test** | \`${{ matrix.model }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **GPU Arch** | \`${{ steps.arch_check.outputs.gpu_arch }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Reason** | ${{ steps.arch_check.outputs.skip_reason }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This test is not supported on this node." >> $GITHUB_STEP_SUMMARY
+          mkdir -p logs/benchmark_results
+          echo '{"status": "skipped", "reason": "${{ steps.arch_check.outputs.skip_reason }}", "model": "${{ matrix.model }}", "gpu_arch": "${{ steps.arch_check.outputs.gpu_arch }}"}' > logs/benchmark_results/skipped.json
+          echo "::warning::SKIPPED: ${{ matrix.model }} - ${{ steps.arch_check.outputs.skip_reason }}"
+
       - name: Pull image
+        if: steps.arch_check.outputs.supported == 'true'
         uses: ./.github/actions/docker-pull
         with:
           image: ${{ env.DOCKER_IMAGE }}
 
+      # Container info (logs/container_info.json) is captured INSIDE the docker run
+      # so it reflects the exact container/GPU env that executed the workload.
+
       - name: Run ComfyUI validation
+        if: steps.arch_check.outputs.supported == 'true'
         run: |
-          run_docker() { if docker info >/dev/null 2>&1; then docker "$@"; else sudo docker "$@"; fi; }
-          HOST_UID=$(id -u); HOST_GID=$(id -g)
+          run_docker() {
+            if docker info >/dev/null 2>&1; then
+              docker "$@"
+            else
+              sudo docker "$@"
+            fi
+          }
+
+          HOST_UID=$(id -u)
+          HOST_GID=$(id -g)
           mkdir -p logs/benchmark_results
-          # The suite entry drives the hardened executor against the ComfyUI
-          # server inside the container and writes results_<test>.json.
+
           CMD="pip install -r requirements.txt >/dev/null 2>&1 || true; \
             python3 tests/src/inference/comfyui/comfyui_benchmark.py \
               --model '${{ matrix.model }}' \
@@ -155,14 +276,32 @@ jobs:
               --comfyui-url '${{ inputs.comfyui_url }}' \
               --execution-label '${EXECUTION_LABEL}' \
               --results-dir logs/benchmark_results; \
-            EXIT=\$?; chown -R ${HOST_UID}:${HOST_GID} /workspace 2>/dev/null || true; exit \$EXIT"
+            EXIT_CODE=\$?; \
+            python3 scripts/capture_system_info.py --output logs/container_info.json --packages --pip-list 2>/dev/null || true; \
+            echo '===== PIP LIST (container) ====='; cat logs/pip_list.log 2>/dev/null || true; \
+            echo '===== END PIP LIST ====='; \
+            chown -R ${HOST_UID}:${HOST_GID} /workspace 2>/dev/null || true; \
+            exit \$EXIT_CODE"
+
           run_docker run --rm --entrypoint /bin/bash $DOCKER_GPU_FLAGS \
-            -e "HF_TOKEN=${HF_TOKEN}" -e PYTHONUNBUFFERED=1 -e CI \
+            -e "HF_TOKEN=${HF_TOKEN}" \
+            -e PYTHONUNBUFFERED=1 -e CI -e CONSOLE_CAPTURE_ACTIVE=1 \
+            -e "DATABASE_UPLOAD_RESULTS=${DATABASE_UPLOAD_RESULTS}" \
             -e "EXECUTION_LABEL=${EXECUTION_LABEL}" \
+            -e "RUNNER_HOSTNAME=${RUNNER_HOST}" \
+            -e "DOCKER_IMAGE=${DOCKER_IMAGE}" \
+            -e "ARTIFACT_URL=${ARTIFACT_URL}" \
+            -e "GITHUB_RUN_ID=${{ github.run_id }}" \
+            -e "GITHUB_ACTIONS=true" \
+            -e "COMFYUI_MODEL_NAME=${COMFYUI_MODEL_NAME}" \
             -e "COMFYUI_IN_CONTAINER=1" \
+            -v /sys:/sys:ro \
             -v $(pwd):/workspace -w /workspace \
             "$DOCKER_IMAGE" -c "$CMD" 2>&1 | tee logs/console_output.log
-          echo "BENCHMARK_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+
+          DOCKER_EXIT=${PIPESTATUS[0]}
+          echo "BENCHMARK_EXIT_CODE=$DOCKER_EXIT" >> "$GITHUB_ENV"
+          exit $DOCKER_EXIT
 
       - name: Cleanup
         if: always()
@@ -170,16 +309,23 @@ jobs:
         with:
           image: ${{ env.DOCKER_IMAGE }}
 
-      - name: Generate summary
+      - name: Generate model summary
         if: always()
         run: python3 tests/src/inference/comfyui/scripts/generate_summary.py --mode github
+        env:
+          RUNNER_HOSTNAME: ${{ env.RUNNER_HOST }}
+          COMFYUI_MODEL_NAME: ${{ matrix.model }}
 
       - name: Upload results to database
-        if: always() && needs.setup.outputs.upload_results == 'true'
+        if: always() && steps.arch_check.outputs.supported == 'true' && needs.setup.outputs.upload_results == 'true'
         env:
           API_URL: ${{ vars.RASTRA_API_URL }}
           API_KEY: ${{ secrets.RASTRA_API_KEY }}
+          DOCKER_IMAGE: ${{ needs.setup.outputs.docker_image }}
           EXECUTION_LABEL: ${{ inputs.execution_label || github.event_name }}
+          RUNNER_HOSTNAME: ${{ env.RUNNER_HOST }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          COMFYUI_MODEL_NAME: ${{ matrix.model }}
         run: |
           pip install -q requests jsonschema packaging pyyaml
           python3 tests/src/inference/comfyui/scripts/upload_from_artifacts.py \
@@ -193,7 +339,7 @@ jobs:
         with:
           source_path: logs/
           framework: comfyui
-          test_name: comfyui_${{ matrix.model }}
+          test_name: comfyui_${{ env.MODEL_SLUG }}
           artifactory_user: ${{ secrets.ARTIFACTORY_USER }}
           artifactory_password: ${{ secrets.ARTIFACTORY_PASSWORD }}
           enabled: ${{ env.UPLOAD_TO_ARTIFACTORY }}
@@ -204,7 +350,7 @@ jobs:
         with:
           name_prefix: 'results'
           runner_label: ${{ matrix.runner_label }}
-          model_slug: ${{ matrix.model }}
+          model_slug: ${{ env.MODEL_SLUG }}
 
       - name: Fix permissions
         if: always()
@@ -219,27 +365,87 @@ jobs:
     runs-on: [self-hosted]
     container: python:3.11-slim
     if: always()
+
+    env:
+      EXECUTION_LABEL: ${{ inputs.execution_label || github.event_name }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Install deps
         run: pip install -q prettytable pyyaml requests jsonschema packaging
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: all_results
           pattern: results__*
+
       - name: Consolidate results
+        id: consolidate
         run: |
-          python3 -m tests.utils.consolidation.config_consolidator \
-            --config tests/src/inference/comfyui/config/consolidation.yaml \
+          python3 tests/src/inference/comfyui/scripts/consolidate_artifacts.py \
             --results-dir all_results \
-            --fail-on-error || echo "consolidation reported failures"
+            --output results_summary.md \
+            --fail-on-error
+
       - name: Add to summary
         if: always()
         run: |
-          [ -f results_summary.md ] && cat results_summary.md >> $GITHUB_STEP_SUMMARY || \
+          if [ -f "results_summary.md" ]; then
+            cat results_summary.md >> $GITHUB_STEP_SUMMARY
+          else
             echo "## No results to consolidate" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload results to database
+        if: needs.setup.outputs.upload_results == 'true'
+        env:
+          API_URL: ${{ vars.RASTRA_API_URL }}
+          API_KEY: ${{ secrets.RASTRA_API_KEY }}
+          DOCKER_IMAGE: ${{ needs.setup.outputs.docker_image }}
+          EXECUTION_LABEL: ${{ inputs.execution_label || github.event_name }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          python3 tests/src/inference/comfyui/scripts/upload_from_artifacts.py \
+            --results-dir all_results \
+            --execution-label "$EXECUTION_LABEL" \
+            --save-payload fallback_payload.json \
+            || echo "Fallback DB upload skipped or failed (non-critical)"
+
+      - name: Generate RASTRA link
+        if: always()
+        run: |
+          echo "Upload results enabled: ${{ needs.setup.outputs.upload_results }}"
+          echo "Searching for payload.json in all_results..."
+          find all_results -name "payload.json" -type f || echo "No payload.json files found"
+          PAYLOAD=$(find all_results -name "payload.json" -type f | head -1)
+          if [ -z "$PAYLOAD" ] && [ -f "fallback_payload.json" ]; then
+            echo "Using fallback_payload.json"
+            PAYLOAD="fallback_payload.json"
+          fi
+          if [ -n "$PAYLOAD" ]; then
+            echo "Found payload: $PAYLOAD"
+            python3 tests/utils/results/rastra_link.py \
+              --from-payload "$PAYLOAD" \
+              --append-summary \
+              --title "View Results in RASTRA Dashboard"
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "---" >> $GITHUB_STEP_SUMMARY
+            echo "**RASTRA Link:** Not available (DB upload disabled or no results)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload consolidated
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: consolidated-${{ github.run_id }}
+          path: |
+            results_summary.md
+            fallback_payload.json
+          retention-days: 90
 
   # ==================== SUMMARY ====================
   summary:
@@ -247,8 +453,10 @@ jobs:
     needs: [setup, benchmark, consolidate]
     runs-on: [self-hosted]
     if: always()
+
     steps:
       - name: Final
         run: |
           echo "## ComfyUI Validation Complete" >> $GITHUB_STEP_SUMMARY
-          echo "Download \`results__*\` artifacts for full evidence." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Download \`consolidated-${{ github.run_id }}\` artifact for full results." >> $GITHUB_STEP_SUMMARY

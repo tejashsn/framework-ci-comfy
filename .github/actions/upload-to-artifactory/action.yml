@@ -1,0 +1,50 @@
+name: Upload to Artifactory
+description: >
+  Upload logs/ to Artifactory at the path in logs/artifactory_path.txt
+  (written by build_artifactory_info). Mirrors the frameworks-qa-ci action.
+
+inputs:
+  source_path:
+    description: Local directory to upload (e.g. logs/)
+    required: true
+  framework:
+    description: Framework name for path generation if artifactory_path.txt is missing
+    required: false
+    default: comfyui
+  test_name:
+    description: Test name for path generation if artifactory_path.txt is missing
+    required: false
+    default: ''
+  logs_dir:
+    description: Directory containing artifactory_path.txt (default logs/)
+    required: false
+    default: 'logs'
+  artifactory_user:
+    description: Artifactory username (falls back to ARTIFACTORY_USER env)
+    required: false
+    default: ''
+  artifactory_password:
+    description: Artifactory password (falls back to ARTIFACTORY_PASSWORD env)
+    required: false
+    default: ''
+  enabled:
+    description: Set to false to skip upload
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Upload logs to Artifactory
+      if: inputs.enabled == 'true'
+      shell: bash
+      env:
+        ARTIFACTORY_USER: ${{ inputs.artifactory_user }}
+        ARTIFACTORY_PASSWORD: ${{ inputs.artifactory_password }}
+      run: |
+        set -euo pipefail
+        python3 scripts/upload_to_artifactory.py \
+          --source-path "${{ inputs.source_path }}" \
+          --logs-dir "${{ inputs.logs_dir }}" \
+          --framework "${{ inputs.framework }}" \
+          --test-name "${{ inputs.test_name }}"

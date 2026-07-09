@@ -1,0 +1,61 @@
+name: 'Setup Test Environment'
+description: 'Common setup for all test workflows - installs dependencies and configures environment'
+inputs:
+  python-version:
+    description: 'Python version to use (3.x = any available Python 3)'
+    required: false
+    default: '3.x'
+  gpu-family:
+    description: 'GPU family name'
+    required: false
+    default: ''
+  execution-label:
+    description: 'Execution label (nightly, smoke, etc.)'
+    required: false
+    default: 'ci'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      id: setup-python
+      uses: actions/setup-python@v5
+      continue-on-error: true
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: 'pip'
+
+    - name: Verify Python available
+      shell: bash
+      run: |
+        # setup-python is continue-on-error: surface a warning when it could
+        # not provision the requested version so version mismatches aren't
+        # silently masked by a system Python fallback.
+        if [ "${{ steps.setup-python.outcome }}" = "failure" ]; then
+          echo "::warning::setup-python failed to provision Python '${{ inputs.python-version }}'; falling back to system Python."
+        fi
+        if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
+          echo "::error::No Python found. setup-python failed and no system python3 available."
+          exit 1
+        fi
+        PY=$(command -v python3 || command -v python)
+        echo "Using: $PY ($($PY --version 2>&1))"
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        # Use `python3 -m pip` (with python fallback) so installs target the
+        # same interpreter selected above, not a possibly-mismatched `pip`.
+        PY=$(command -v python3 || command -v python)
+        "$PY" -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then
+          "$PY" -m pip install -r requirements.txt
+        fi
+
+    - name: Set environment variables
+      shell: bash
+      run: |
+        echo "GPU_FAMILY=${{ inputs.gpu-family }}" >> $GITHUB_ENV
+        echo "EXECUTION_LABEL=${{ inputs.execution-label }}" >> $GITHUB_ENV
+        echo "OS=${{ runner.os }}" >> $GITHUB_ENV
+        echo "CI=true" >> $GITHUB_ENV

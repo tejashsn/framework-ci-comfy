@@ -1,0 +1,51 @@
+# Composite action to upload benchmark artifacts with standard naming
+#
+# Usage:
+#   - uses: ./.github/actions/upload-artifacts
+#     with:
+#       name_prefix: 'vllm'
+#       runner_label: ${{ matrix.runner_label }}
+#       model_slug: ${{ env.MODEL_SLUG }}
+
+name: 'Upload Artifacts'
+description: 'Upload logs and results with standardized naming'
+
+inputs:
+  name_prefix:
+    description: 'Prefix for artifact name (e.g., vllm, mad)'
+    required: false
+    default: 'results'
+  runner_label:
+    description: 'Runner label for artifact name'
+    required: false
+    default: ''
+  model_slug:
+    description: 'Model slug for artifact name'
+    required: false
+    default: ''
+  paths:
+    description: 'Paths to upload (newline or space separated, supports ! exclusions)'
+    required: false
+    default: |
+      logs/
+      results/
+      !logs/**/server.log
+      !logs/**/benchmark_execution.log
+      !logs/**/pip_list.log
+      !logs/**/*_summary.json
+      !logs/**/bm_config.json
+      !logs/**/container_info.json
+  retention_days:
+    description: 'Number of days to retain artifacts'
+    required: false
+    default: '90'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name_prefix }}__${{ inputs.runner_label }}__${{ inputs.model_slug }}__${{ github.run_id }}
+        path: ${{ inputs.paths }}
+        retention-days: ${{ inputs.retention_days }}
