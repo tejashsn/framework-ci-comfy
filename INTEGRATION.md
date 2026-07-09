@@ -20,11 +20,26 @@ The workflow's `uses: ./.github/actions/*` paths resolve automatically.
 
 ## Standalone path
 
-To run CI from this repo alone you must also vendor:
+This repo now includes:
 
-- `.github/actions/` from the fleet (13 composite actions)
-- `scripts/capture_system_info.py`, `scripts/upload_to_artifactory.py`
-- Optionally `tests/utils/consolidation/` if you switch consolidate back to `config_consolidator`
+- `scripts/upload_to_artifactory.py` — PUT `logs/` to Artifactory (reads `logs/artifactory_path.txt`)
+- `.github/actions/upload-to-artifactory` — same contract as the fleet action
+
+To run full CI standalone you still need the other fleet actions from `frameworks-qa-ci`:
+
+- `provision-runtime`, `capture-host-info`, `docker-pull`, `docker-cleanup`, `upload-artifacts`, `fix-permissions`
+- `scripts/capture_system_info.py` (or write `logs/bm_config.json` by hand for manual runs)
+
+Manual Artifactory upload after a benchmark:
+
+```bash
+export ARTIFACTORY_USER=...
+export ARTIFACTORY_PASSWORD=...
+python tests/src/inference/comfyui/scripts/upload_from_artifacts.py \
+  --results-dir logs/benchmark_results --dry-run   # writes artifactory_path.txt
+python scripts/upload_to_artifactory.py \
+  --source-path logs/ --test-name comfyui_stable_diffusion_2_1
+```
 
 Or run benchmarks only:
 

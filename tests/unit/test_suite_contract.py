@@ -169,3 +169,31 @@ def test_framework_detection():
     from tests.utils.results.handler import _derive_framework
     assert _derive_framework("comfyui_stable_diffusion_2_1") == "comfyui"
     assert _derive_framework("vllm_serving_x") == "vllm"
+
+
+# --------------------------------------------------------------------------- #
+# artifactory upload path (no network)
+# --------------------------------------------------------------------------- #
+def test_artifactory_upload_resolves_path(tmp_path):
+    sys.path.insert(0, str(REPO / "scripts"))
+    import upload_to_artifactory
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "artifactory_path.txt").write_text(
+        "/artifactory/rocm-qa-test-logs/test-logs/framework-ci/comfyui/7.15.0/host_0-comfyui_sd21/2026-07-08_12-00-00"
+    )
+    src = logs / "benchmark_results"
+    src.mkdir()
+    (src / "results_x.json").write_text("{}")
+
+    base = upload_to_artifactory.resolve_upload_base_url(
+        (logs / "artifactory_path.txt").read_text()
+    )
+    assert base.endswith("2026-07-08_12-00-00")
+
+    upload_base, ok, fail = upload_to_artifactory.upload_directory(
+        src, logs_dir=logs, dry_run=True
+    )
+    assert ok == 1 and fail == 0
+    assert "comfyui_sd21" in upload_base
