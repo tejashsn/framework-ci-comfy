@@ -140,7 +140,6 @@ def parse_inputs(args) -> int:
         labels = ["self-hosted"]
 
     trigger_type = args.trigger or "workflow_dispatch"
-    docker_image = args.docker_image or "rocm/pytorch:latest"
     upload_results = str(args.upload).lower() if args.upload is not None else "true"
 
     model_count = len(selected)
@@ -152,7 +151,7 @@ def parse_inputs(args) -> int:
     print(f"Runner labels ({label_count}): {json.dumps(labels)}")
     print(f"Total jobs: {model_count} models × {label_count} labels = {total_jobs} jobs")
     print(f"Upload results: {upload_results}")
-    print(f"Docker image: {docker_image}")
+    print(f"Execution mode: baremetal (no Docker)")
 
     if args.output_file:
         with open(args.output_file, "a", encoding="utf-8") as f:
@@ -161,7 +160,6 @@ def parse_inputs(args) -> int:
             f.write(f"trigger_type={trigger_type}\n")
             f.write(f"runner_labels={json.dumps(labels)}\n")
             f.write(f"runner_label_count={label_count}\n")
-            f.write(f"docker_image={docker_image}\n")
             f.write(f"upload_results={upload_results}\n")
     return 0
 
@@ -180,7 +178,6 @@ def main():
     p.add_argument("--model", default="", help="Test name for --check-arch-only")
     p.add_argument("--runner-label", default="self-hosted")
     p.add_argument("--trigger", default="workflow_dispatch")
-    p.add_argument("--docker-image", default="rocm/pytorch:latest")
     p.add_argument("--upload", default=None,
                    help="Upload results flag (true/false) for setup job output")
     p.add_argument("--config-file", default=str(MODELS_CONFIG))

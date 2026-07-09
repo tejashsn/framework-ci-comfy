@@ -13,9 +13,12 @@ tests/src/inference/comfyui/
     models_config.yaml          # Derived fleet view (regenerate with create_config.py)
     models.json                 # Model weight expectations for SKIP logic
     consolidation.yaml            # Legacy — consolidator uses consolidate_artifacts.py
-  executors/                    # ComfyUI runtime + validator (ported engine)
+  executors/
+    fetch_models.py             # Auto-download missing weights (HF / URL)
+    model_check.py              # Presence + identity gate
   scripts/
     create_config.py            # Matrix + models_config regeneration
+    fetch_models.py             # Auto-download missing weights (executors/)
     generate_summary.py         # Per-job GitHub Step Summary table
     upload_from_artifacts.py    # RASTRA payload build + POST
     consolidate_artifacts.py    # Multi-artifact rollup (CI consolidate job)
@@ -36,8 +39,13 @@ python tests/src/inference/comfyui/comfyui_benchmark.py \
 
 Workflow: `.github/workflows/comfyui-ci.yml` (`ComfyUI Validation`).
 
+**Bare metal only** — no Docker. The runner must have ComfyUI listening at
+`comfyui_url` (default `http://127.0.0.1:8188`) and weights under
+`COMFYUI_PATH`. Set repo variable `COMFYUI_PATH` / `COMFYUI_PYTHON` on the
+runner, or pass them as workflow inputs.
+
 **Fleet integration:** drop this folder + the workflow into `frameworks-qa-ci`.
-Composite actions (`provision-runtime`, `capture-host-info`, etc.) resolve from
+Composite actions (`capture-host-info`, `upload-artifacts`, etc.) resolve from
 the fleet repo. See `INTEGRATION.md` at repo root.
 
 ## Results

@@ -15,11 +15,9 @@ bare node both invoke the same way. It does four things:
      carrying provenance + detected arch.
   4. Write benchmark_summary.json.
 
-Two ways to run (same as the xDiT runner):
-  * CI / already inside the ComfyUI container -> runs directly against the
-    reachable ComfyUI server.
-  * On a node -> pass --docker-image and it launches that container, mounts the
-    cwd, and re-invokes itself inside (COMFYUI_IN_CONTAINER=1 guards recursion).
+Two ways to run:
+  * CI / bare-metal node with ComfyUI already running -> invoke directly.
+  * Optional: pass --docker-image to self-wrap in a container (not used by CI).
 
 Examples:
   python tests/src/inference/comfyui/comfyui_benchmark.py \

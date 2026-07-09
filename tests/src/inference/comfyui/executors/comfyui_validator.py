@@ -263,31 +263,63 @@ def main():
         write_gha_output("infra_error", f"comfyui_unreachable:{args.comfyui_url}")
         sys.exit(3)
 
-    # Model-presence gate: a missing model is a content SKIP (exit 2), NOT an
-    # infrastructure failure. Weights are large/gated and never auto-downloaded.
+    # Model-presence gate: auto-download missing weights when configured, then
+    # re-check. Still missing after fetch -> FAIL (content_fetch_failed).
     comfy_path = resolve_comfyui_path(args.comfyui_path)
     if comfy_path:
+        import fetch_models
         try:
             import model_check
             missing = model_check.missing_models(test["workflow"], comfy_path)
         except Exception:
             missing = []
+        if missing and fetch_models.auto_fetch_enabled():
+            print(f"[fetch] {len(missing)} model(s) missing — starting auto-download")
+            fr = fetch_models.ensure_missing(missing, comfy_path)
+            for err in fr.errors:
+                print(f"[fetch] {err}")
+            try:
+                missing = model_check.missing_models(test["workflow"], comfy_path)
+            except Exception:
+                missing = list(missing)
         if missing:
             msg = model_check.skip_message(missing)
+            if fetch_models.auto_fetch_enabled():
+                print(f"[FAIL] {args.execute} - still missing after auto-fetch: {msg}",
+                      file=sys.stderr)
+                write_gha_output("result", "FAIL")
+                write_gha_output("failure_reason", "content_fetch_failed")
+                sys.exit(1)
             print(f"[SKIP] {args.execute} - {msg}")
             write_gha_output("result", "SKIP")
             write_gha_output("skip_reason", "model_missing")
             sys.exit(2)
-        # Identity check: a present-but-wrong file (size/sha256 mismatch vs
-        # configs/models.json) is a content SKIP, never a FAIL. No-op until
-        # checksums are filled in on the fleet.
+        # Identity check: wrong file on disk — try re-fetch when auto-fetch on.
         try:
             mismatches = model_check.identity_mismatches(test["workflow"], comfy_path)
         except Exception:
             mismatches = []
+        if mismatches and fetch_models.auto_fetch_enabled():
+            refs = model_check.referenced_models(test["workflow"])
+            by_name = {fn: subs for fn, subs in refs}
+            to_refetch = [(fn, by_name[fn]) for fn in by_name
+                          if any(fn in m for m in mismatches)]
+            for fn, subs in to_refetch:
+                fetch_models.download_one(fn, subs, comfy_path,
+                                          fetch_models.load_manifest(), force=True)
+            try:
+                mismatches = model_check.identity_mismatches(test["workflow"], comfy_path)
+            except Exception:
+                pass
         if mismatches:
-            print(f"[SKIP] {args.execute} - model identity mismatch: "
-                  + "; ".join(mismatches))
+            detail = "; ".join(mismatches)
+            if fetch_models.auto_fetch_enabled():
+                print(f"[FAIL] {args.execute} - model identity mismatch after "
+                      f"re-fetch: {detail}", file=sys.stderr)
+                write_gha_output("result", "FAIL")
+                write_gha_output("failure_reason", "model_identity_mismatch")
+                sys.exit(1)
+            print(f"[SKIP] {args.execute} - model identity mismatch: {detail}")
             write_gha_output("result", "SKIP")
             write_gha_output("skip_reason", "model_identity_mismatch")
             sys.exit(2)
