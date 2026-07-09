@@ -174,7 +174,44 @@ def test_framework_detection():
 # --------------------------------------------------------------------------- #
 # artifactory upload path (no network)
 # --------------------------------------------------------------------------- #
-def test_artifactory_upload_resolves_path(tmp_path):
+def test_prune_keeps_fastest_image_only(tmp_path):
+    import single_test_protocol
+
+    f1 = tmp_path / "a.png"
+    f2 = tmp_path / "b.png"
+    f3 = tmp_path / "c.png"
+    for f in (f1, f2, f3):
+        f.write_bytes(b"x")
+    result = {
+        "runs": [
+            {"run": 1, "status": "OK", "latency_s": 10.0, "output_files": [str(f1)]},
+            {"run": 2, "status": "OK", "latency_s": 5.0, "output_files": [str(f2)]},
+            {"run": 3, "status": "OK", "latency_s": 8.0, "output_files": [str(f3)]},
+        ],
+        "errors": [],
+    }
+    single_test_protocol.prune_image_outputs_to_best_run(result, "image")
+    assert result["output_files"] == [str(f2)]
+    assert result["best_run"] == 2
+    assert not f1.exists() and f2.exists() and not f3.exists()
+
+
+def test_prune_skips_video(tmp_path):
+    import single_test_protocol
+
+    f1, f2 = tmp_path / "a.mp4", tmp_path / "b.mp4"
+    f1.write_bytes(b"x")
+    f2.write_bytes(b"y")
+    result = {
+        "runs": [
+            {"run": 1, "status": "OK", "latency_s": 10.0, "output_files": [str(f1)]},
+            {"run": 2, "status": "OK", "latency_s": 5.0, "output_files": [str(f2)]},
+        ],
+        "errors": [],
+    }
+    single_test_protocol.prune_image_outputs_to_best_run(result, "video")
+    assert f1.exists() and f2.exists()
+    assert "best_run" not in result
     sys.path.insert(0, str(REPO / "scripts"))
     import upload_to_artifactory
 
