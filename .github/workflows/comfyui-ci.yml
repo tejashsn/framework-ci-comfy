@@ -185,6 +185,7 @@ jobs:
       ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
       COMFYUI_MODEL_NAME: ${{ matrix.model }}
       COMFYUI_PATH: ${{ inputs.comfyui_path || vars.COMFYUI_PATH || '' }}
+      COMFYUI_PYTHON: ${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}
       UPLOAD_TO_ARTIFACTORY: ${{ inputs.upload_to_artifactory || false }}
 
     steps:
@@ -302,7 +303,15 @@ jobs:
           set -euo pipefail
           mkdir -p logs/benchmark_results
 
-          PY="${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || 'python3' }}"
+          PY="${COMFYUI_PYTHON:-${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}}"
+          PY="${PY:-python3}"
+          if [ -z "${COMFYUI_PATH:-}" ] && [ -d /home/master/ComfyUI ]; then
+            echo "COMFYUI_PATH=/home/master/ComfyUI" >> "$GITHUB_ENV"
+          fi
+          if [ "$PY" = "python3" ] && [ -x /home/master/comfyui-host-venv/bin/python ]; then
+            PY=/home/master/comfyui-host-venv/bin/python
+            echo "Using discovered ComfyUI venv Python: $PY"
+          fi
           echo "Using Python: $($PY --version 2>&1)"
           echo "ComfyUI path: ${COMFYUI_PATH:-'(from runner env/discovery)'}"
           echo "ComfyUI URL: ${{ inputs.comfyui_url }}"
@@ -327,7 +336,7 @@ jobs:
             --model '${{ matrix.model }}' \
             --rocm-version "$ROCM_VER" \
             --comfyui-url '${{ inputs.comfyui_url }}' \
-            --execution-label '${EXECUTION_LABEL}' \
+            --execution-label "${EXECUTION_LABEL}" \
             --results-dir logs/benchmark_results \
             "${ARCH_ARGS[@]}" \
             2>&1 | tee logs/console_output.log

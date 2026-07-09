@@ -333,6 +333,12 @@ def main():
     }
 
     workflow_path = Path(args.workflow)
+    if not workflow_path.is_file():
+        # Manifest paths are relative to tests/src/inference/comfyui/
+        suite_root = Path(__file__).resolve().parent.parent
+        candidate = suite_root / args.workflow
+        if candidate.is_file():
+            workflow_path = candidate
     if not workflow_path.exists():
         result["errors"].append(f"workflow_not_found:{workflow_path}")
         (out_dir / "results.json").write_text(json.dumps(result, indent=2))

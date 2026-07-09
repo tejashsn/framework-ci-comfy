@@ -99,6 +99,17 @@ def effective_timeout_minutes(test, gpu_arch):
         return int(test["timeout_minutes"])
 
 
+def resolve_workflow_path(workflow_rel: str) -> Path:
+    """Resolve manifest workflow paths (workflows/foo.json) against the suite root."""
+    p = Path(workflow_rel)
+    if p.is_file():
+        return p.resolve()
+    candidate = SUITE_DIR / workflow_rel
+    if candidate.is_file():
+        return candidate.resolve()
+    return p
+
+
 def resolve_comfyui_path(explicit):
     """Resolve the ComfyUI install dir for the model-presence check. Honour an
     explicit --comfyui_path / $COMFYUI_PATH, else use the shared runtime's
@@ -270,7 +281,7 @@ def main():
 
     # Dry run: validate paths, no GPU calls
     if args.dry_run:
-        workflow_path = Path(test["workflow"])
+        workflow_path = resolve_workflow_path(test["workflow"])
         if not workflow_path.exists():
             print(f"[DRY_RUN] WARNING: workflow file not found: {workflow_path}")
         else:
@@ -289,11 +300,12 @@ def main():
     # Model-presence gate: auto-download missing weights when configured, then
     # re-check. Still missing after fetch -> FAIL (content_fetch_failed).
     comfy_path = resolve_comfyui_path(args.comfyui_path)
+    workflow_file = str(resolve_workflow_path(test["workflow"]))
     if comfy_path:
         import fetch_models
         try:
             import model_check
-            missing = model_check.missing_models(test["workflow"], comfy_path)
+            missing = model_check.missing_models(workflow_file, comfy_path)
         except Exception:
             missing = []
         if missing and fetch_models.auto_fetch_enabled():
@@ -302,7 +314,7 @@ def main():
             for err in fr.errors:
                 print(f"[fetch] {err}")
             try:
-                missing = model_check.missing_models(test["workflow"], comfy_path)
+                missing = model_check.missing_models(workflow_file, comfy_path)
             except Exception:
                 missing = list(missing)
         if missing:
@@ -319,11 +331,11 @@ def main():
             sys.exit(2)
         # Identity check: wrong file on disk — try re-fetch when auto-fetch on.
         try:
-            mismatches = model_check.identity_mismatches(test["workflow"], comfy_path)
+            mismatches = model_check.identity_mismatches(workflow_file, comfy_path)
         except Exception:
             mismatches = []
         if mismatches and fetch_models.auto_fetch_enabled():
-            refs = model_check.referenced_models(test["workflow"])
+            refs = model_check.referenced_models(workflow_file)
             by_name = {fn: subs for fn, subs in refs}
             to_refetch = [(fn, by_name[fn]) for fn in by_name
                           if any(fn in m for m in mismatches)]
@@ -331,7 +343,7 @@ def main():
                 fetch_models.download_one(fn, subs, comfy_path,
                                           fetch_models.load_manifest(), force=True)
             try:
-                mismatches = model_check.identity_mismatches(test["workflow"], comfy_path)
+                mismatches = model_check.identity_mismatches(workflow_file, comfy_path)
             except Exception:
                 pass
         if mismatches:
@@ -374,7 +386,7 @@ def main():
         sys.executable,
         str(EXECUTORS_DIR / "single_test_protocol.py"),
         "--test_name",      args.execute,
-        "--workflow",       test["workflow"],
+        "--workflow",       workflow_file,
         "--comfyui_url",    args.comfyui_url,
         "--output_dir",     str(evidence_dir),
         "--warmup_runs",    str(0 if args.skip_warmup else test["perf_targets"]["warmup_runs"]),
