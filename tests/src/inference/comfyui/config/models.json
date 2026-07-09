@@ -2,7 +2,12 @@
   "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Qwen-Image_ComfyUI",
+      "filename": "Qwen-Image-2512-Lightning-4steps-V1.0-fp32.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "loras"
     ]
@@ -10,15 +15,28 @@
   "ae.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "black-forest-labs/FLUX.1-dev",
+      "filename": "ae.safetensors",
+      "gated": true
+    },
     "subdirs": [
       "vae"
-    ]
+    ],
+    "artifactory": {
+      "path": "vae/ae.safetensors"
+    }
   },
   "chroma-radiance-x0.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/chroma",
+      "filename": "chroma-radiance-x0.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -27,7 +45,12 @@
   "clip_l.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "comfyanonymous/flux_text_encoders",
+      "filename": "clip_l.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "clip",
       "text_encoders"
@@ -36,7 +59,12 @@
   "flux1-krea-dev_fp8_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/flux1-krea-dev",
+      "filename": "flux1-krea-dev_fp8_scaled.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -45,7 +73,12 @@
   "flux1-schnell-fp8.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/flux1-schnell",
+      "filename": "flux1-schnell-fp8.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "checkpoints"
     ]
@@ -53,7 +86,12 @@
   "flux2-vae.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/flux2-dev",
+      "filename": "flux2-vae.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "vae"
     ]
@@ -61,7 +99,12 @@
   "flux2_dev_fp8mixed.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/flux2-dev",
+      "filename": "flux2_dev_fp8mixed.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -70,7 +113,12 @@
   "ltx-video-2b-v0.9.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Lightricks/LTX-Video",
+      "filename": "ltx-video-2b-v0.9.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "checkpoints"
     ]
@@ -78,7 +126,12 @@
   "mistral_3_small_flux2_bf16.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/flux2-dev",
+      "filename": "mistral_3_small_flux2_bf16.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "clip",
       "text_encoders"
@@ -87,7 +140,12 @@
   "qwen_2.5_vl_7b_fp8_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Qwen-Image_ComfyUI",
+      "filename": "qwen_2.5_vl_7b_fp8_scaled.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "clip",
       "text_encoders"
@@ -96,7 +154,12 @@
   "qwen_3_4b.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/z_image_turbo",
+      "filename": "qwen_3_4b.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "clip",
       "text_encoders"
@@ -105,7 +168,12 @@
   "qwen_image_2512_fp8_e4m3fn.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Qwen-Image_ComfyUI",
+      "filename": "qwen_image_2512_fp8_e4m3fn.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -114,7 +182,12 @@
   "qwen_image_vae.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Qwen-Image_ComfyUI",
+      "filename": "qwen_image_vae.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "vae"
     ]
@@ -122,39 +195,76 @@
   "sd3.5_large_controlnet_canny.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "stabilityai/stable-diffusion-3.5-controlnets",
+      "filename": "sd3.5_large_controlnet_canny.safetensors",
+      "gated": true
+    },
     "subdirs": [
       "controlnet"
-    ]
+    ],
+    "artifactory": {
+      "path": "controlnet/sd3.5_large_controlnet_canny.safetensors"
+    }
   },
   "sd3.5_large_fp8_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "stabilityai/stable-diffusion-3.5-large",
+      "filename": "sd3.5_large_fp8_scaled.safetensors",
+      "gated": true
+    },
     "subdirs": [
       "checkpoints"
-    ]
+    ],
+    "artifactory": {
+      "path": "checkpoints/sd3.5_large_fp8_scaled.safetensors"
+    }
   },
   "sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "stabilityai/stable-diffusion-3.5-medium",
+      "filename": "sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors",
+      "gated": true
+    },
     "subdirs": [
       "checkpoints"
-    ]
+    ],
+    "artifactory": {
+      "path": "checkpoints/sd3.5_medium_incl_clips_t5xxlfp8scaled.safetensors"
+    }
   },
   "sd3_medium_incl_clips_t5xxlfp8.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "stabilityai/stable-diffusion-3-medium",
+      "filename": "sd3_medium_incl_clips_t5xxlfp8.safetensors",
+      "gated": true
+    },
     "subdirs": [
       "checkpoints"
-    ]
+    ],
+    "artifactory": {
+      "path": "checkpoints/sd3_medium_incl_clips_t5xxlfp8.safetensors"
+    }
   },
   "sd_xl_base_1.0.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "stabilityai/stable-diffusion-xl-base-1.0",
+      "filename": "sd_xl_base_1.0.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "checkpoints"
     ]
@@ -162,7 +272,12 @@
   "sd_xl_refiner_1.0.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "stabilityai/stable-diffusion-xl-refiner-1.0",
+      "filename": "sd_xl_refiner_1.0.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "checkpoints"
     ]
@@ -170,7 +285,12 @@
   "t5xxl_fp16.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "comfyanonymous/flux_text_encoders",
+      "filename": "t5xxl_fp16.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "clip",
       "text_encoders"
@@ -179,7 +299,12 @@
   "t5xxl_fp8_e4m3fn_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "comfyanonymous/flux_text_encoders",
+      "filename": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "clip",
       "text_encoders"
@@ -188,7 +313,12 @@
   "umt5_xxl_fp8_e4m3fn_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+      "filename": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "clip",
       "text_encoders"
@@ -197,7 +327,12 @@
   "v1-5-pruned-emaonly-fp16.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/stable-diffusion-v1-5-archive",
+      "filename": "v1-5-pruned-emaonly-fp16.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "checkpoints"
     ]
@@ -205,7 +340,12 @@
   "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -214,7 +354,12 @@
   "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "loras"
     ]
@@ -222,7 +367,12 @@
   "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "loras"
     ]
@@ -230,7 +380,12 @@
   "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -239,7 +394,12 @@
   "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -248,7 +408,12 @@
   "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "loras"
     ]
@@ -256,7 +421,12 @@
   "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "loras"
     ]
@@ -264,7 +434,12 @@
   "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -273,7 +448,12 @@
   "wan2.2_ti2v_5B_fp16.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_ti2v_5B_fp16.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"
@@ -282,7 +462,12 @@
   "wan2.2_vae.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "filename": "wan2.2_vae.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "vae"
     ]
@@ -290,7 +475,12 @@
   "wan_2.1_vae.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
+      "filename": "wan_2.1_vae.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "vae"
     ]
@@ -298,7 +488,12 @@
   "z_image_turbo_bf16.safetensors": {
     "sha256": null,
     "size_bytes": null,
-    "source": null,
+    "source": {
+      "type": "huggingface",
+      "repo_id": "Comfy-Org/z_image_turbo",
+      "filename": "z_image_turbo_bf16.safetensors",
+      "gated": false
+    },
     "subdirs": [
       "unet",
       "diffusion_models"

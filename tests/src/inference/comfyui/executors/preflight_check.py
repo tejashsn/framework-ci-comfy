@@ -242,9 +242,10 @@ def run_doctor(gpu_arch, comfyui_url, repo_root=REPO_ROOT):
             line += f"  ({extra})"
         print(line)
     if models["status"] == "WARN":
-        print("           FIX: place the missing weights under ComfyUI/models/ "
-              "or run scripts/fetch_models.py (see RUNBOOK). Missing models are "
-              "SKIPs, not failures.")
+        print("           FIX: missing weights are auto-downloaded when "
+              "AUTO_FETCH_MODELS=true (default); set HF_TOKEN for gated models "
+              "or run: python executors/fetch_models.py --workflow <wf> "
+              "--comfyui_path $COMFYUI_PATH")
 
     print("\n" + "=" * 66)
     if infra_broken:

@@ -48,9 +48,82 @@ def test_models_config_covers_every_manifest_test():
 def test_ported_executors_import():
     import comfyui_runtime  # noqa: F401
     import model_check
+    import fetch_models
     import comfyui_validator  # noqa: F401
     # model_check must resolve the relocated config/models.json
     assert len(model_check.load_models_manifest()) > 0
+    assert fetch_models.auto_fetch_enabled() is True
+
+
+def test_fetch_models_no_source(tmp_path, monkeypatch):
+    import fetch_models
+    monkeypatch.setenv("AUTO_FETCH_MODELS", "true")
+    manifest = {"missing.safetensors": {"source": None, "subdirs": ["checkpoints"]}}
+    comfy = tmp_path / "ComfyUI"
+    (comfy / "models" / "checkpoints").mkdir(parents=True)
+    ok, detail = fetch_models.download_one(
+        "missing.safetensors", ["checkpoints"], str(comfy), manifest,
+    )
+    assert not ok
+    assert "no download source" in detail
+
+
+def test_fetch_models_already_present(tmp_path):
+    import fetch_models
+    comfy = tmp_path / "ComfyUI"
+    ckpt = comfy / "models" / "checkpoints"
+    ckpt.mkdir(parents=True)
+    (ckpt / "present.safetensors").write_bytes(b"x")
+    manifest = {
+        "present.safetensors": {
+            "source": {"type": "huggingface", "repo_id": "x/y", "filename": "present.safetensors"},
+            "subdirs": ["checkpoints"],
+        }
+    }
+    ok, detail = fetch_models.download_one(
+        "present.safetensors", ["checkpoints"], str(comfy), manifest,
+    )
+    assert ok and "already" in detail
+
+
+def test_auto_fetch_disabled(monkeypatch):
+    import fetch_models
+    monkeypatch.setenv("AUTO_FETCH_MODELS", "false")
+    assert fetch_models.auto_fetch_enabled() is False
+
+
+def test_artifactory_model_url(monkeypatch):
+    import fetch_models
+    monkeypatch.setenv("ARTIFACTORY_URL", "https://art.example.com")
+    monkeypatch.setenv("COMFYUI_MODELS_ARTIFACTORY_REPO", "artifactory/rocm-qa-model-cache/comfyui")
+    entry = {
+        "artifactory": {"path": "checkpoints/foo.safetensors"},
+        "subdirs": ["checkpoints"],
+    }
+    url = fetch_models.artifactory_model_url(entry, "foo.safetensors", ["checkpoints"])
+    assert url == (
+        "https://art.example.com/artifactory/rocm-qa-model-cache/comfyui/"
+        "checkpoints/foo.safetensors"
+    )
+
+
+def test_artifactory_requires_credentials(monkeypatch, tmp_path):
+    import fetch_models
+    monkeypatch.delenv("ARTIFACTORY_USER", raising=False)
+    monkeypatch.delenv("ARTIFACTORY_PASSWORD", raising=False)
+    comfy = tmp_path / "ComfyUI"
+    manifest = {
+        "gated.safetensors": {
+            "source": {"type": "huggingface", "repo_id": "x/y", "filename": "gated.safetensors", "gated": True},
+            "artifactory": {"path": "checkpoints/gated.safetensors"},
+            "subdirs": ["checkpoints"],
+        }
+    }
+    ok, detail = fetch_models.download_one(
+        "gated.safetensors", ["checkpoints"], str(comfy), manifest,
+    )
+    assert not ok
+    assert "ARTIFACTORY_USER" in detail
 
 
 # --------------------------------------------------------------------------- #

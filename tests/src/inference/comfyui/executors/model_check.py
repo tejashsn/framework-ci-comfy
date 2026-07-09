@@ -4,9 +4,8 @@ Layer    : Pre-run content gate (offline)
 Purpose  : Decide whether a test should be SKIPped because its model weights are
            not present, vs. run for real. ComfyUI workflows reference model files
            by name in their loader nodes (e.g. UNETLoader.unet_name = "foo.safetensors").
-           Those weights are large and often license-gated, so they are NOT
-           auto-downloaded; a missing model is a *content* skip (exit 2), not an
-           infrastructure failure (exit 3).
+           Those weights are large and often license-gated; when AUTO_FETCH_MODELS
+           is enabled (default) missing files are downloaded from config/models.json.
 
 Maps the common ComfyUI loader node types to the ComfyUI/models/<subdir>/ they
 load from, resolves each referenced filename, and reports which are missing.
@@ -116,8 +115,8 @@ def skip_message(missing):
         parts.append(loc)
     joined = ", ".join(parts)
     return (f"SKIP: model not found: {joined}. "
-            "Place the file(s) under ComfyUI/models/ or set HF_TOKEN for gated "
-            "models (gated weights are not auto-downloaded).")
+            "Place the file(s) under ComfyUI/models/, set HF_TOKEN for gated "
+            "models, or enable AUTO_FETCH_MODELS (default) to download.")
 
 
 def load_models_manifest(path=MODELS_JSON):
