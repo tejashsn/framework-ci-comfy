@@ -24,7 +24,7 @@ on:
         required: false
         default: 'self-hosted'
       rocm_version:
-        description: 'ROCm build under test (e.g. 7.15.0)'
+        description: 'ROCm build under test (e.g. 7.15.0). Auto-detected from /etc/rocm_metadata.conf if empty.'
         required: false
         default: ''
       comfyui_url:
@@ -211,6 +211,60 @@ jobs:
       - name: Capture host config
         uses: ./.github/actions/capture-host-info
 
+      # Same ROCm env bootstrap as qa-forge rocm-func-core-therock-install.yml
+      # (load-rocm-from-metadata + setup-rocm-env after install).
+      - name: Setup ROCm environment
+        uses: ./.github/actions/setup-rocm-env
+        with:
+          enable-rocm-path: 'true'
+          enable-ld-library-path: 'true'
+          enable-hip-platform: 'true'
+
+      - name: Detect ROCm version
+        id: rocm_detect
+        run: |
+          set -euo pipefail
+          ROCM_VER="${{ inputs.rocm_version }}"
+
+          # Primary: /etc/rocm_metadata.conf written by ROCmTest/TheRock install
+          if [ -z "$ROCM_VER" ] && [ -f /etc/rocm_metadata.conf ]; then
+            INSTALLED=$(grep -E '^INSTALLED_VERSION\s*=' /etc/rocm_metadata.conf \
+              | sed 's/^INSTALLED_VERSION\s*=\s*//' | tr -d ' ' || true)
+            if [ -n "$INSTALLED" ]; then
+              ROCM_VER="${INSTALLED%%-*}"
+              echo "ROCm version from /etc/rocm_metadata.conf: $ROCM_VER (full: $INSTALLED)"
+            fi
+            GFX_TARGET=$(grep -E '^INSTALLED_GFX_TARGET\s*=' /etc/rocm_metadata.conf \
+              | sed 's/^INSTALLED_GFX_TARGET\s*=\s*//' | tr -d ' ' || true)
+            if [ -n "$GFX_TARGET" ]; then
+              echo "INSTALLED_GFX_TARGET=$GFX_TARGET" >> "$GITHUB_ENV"
+            fi
+          fi
+
+          # Fallback: host capture (logs/bm_config.json from capture-host-info)
+          if { [ -z "$ROCM_VER" ] || [ "$ROCM_VER" = "Unknown" ]; } && [ -f logs/bm_config.json ]; then
+            ROCM_VER=$(python3 -c "import json; d=json.load(open('logs/bm_config.json')); print((d.get('rocm_version') or '').strip())" 2>/dev/null || true)
+            [ -n "$ROCM_VER" ] && echo "ROCm version from logs/bm_config.json: $ROCM_VER"
+          fi
+
+          # Fallback: fleet ROCmDetector ($ROCM_PATH/.info/version-rocm, amd-smi, rocminfo)
+          if [ -z "$ROCM_VER" ] || [ "$ROCM_VER" = "Unknown" ]; then
+            ROCM_VER=$(python3 -c "
+          from tests.utils.system.rocm_detector import ROCmDetector
+          v = ROCmDetector._detect_rocm_version() or ''
+          print(v.split('-')[0] if v else '')
+          " 2>/dev/null || true)
+            [ -n "$ROCM_VER" ] && echo "ROCm version from ROCmDetector: $ROCM_VER"
+          fi
+
+          if [ -z "$ROCM_VER" ]; then
+            echo "::warning::Could not detect ROCm version; using 'unknown'"
+            ROCM_VER="unknown"
+          fi
+
+          echo "rocm_version=$ROCM_VER" >> "$GITHUB_OUTPUT"
+          echo "ROCM_VERSION=$ROCM_VER" >> "$GITHUB_ENV"
+
       - name: Job info
         id: info
         uses: ./.github/actions/job-info
@@ -254,13 +308,28 @@ jobs:
           echo "ComfyUI URL: ${{ inputs.comfyui_url }}"
 
           "$PY" -m pip install -q -r requirements.txt
+
+          ARCH_ARGS=()
+          GPU_ARCH='${{ steps.arch_check.outputs.gpu_arch }}'
+          if [ -z "$GPU_ARCH" ] || [ "$GPU_ARCH" = "unknown" ]; then
+            GPU_ARCH="${INSTALLED_GFX_TARGET:-}"
+          fi
+          if [ -n "$GPU_ARCH" ] && [ "$GPU_ARCH" != "unknown" ]; then
+            ARCH_ARGS=(--arch "$GPU_ARCH")
+            echo "Using GPU arch: $GPU_ARCH"
+          fi
+
+          ROCM_VER='${{ steps.rocm_detect.outputs.rocm_version }}'
+          echo "Using ROCm version: $ROCM_VER"
+
           set +e
           "$PY" tests/src/inference/comfyui/comfyui_benchmark.py \
             --model '${{ matrix.model }}' \
-            --rocm-version '${{ inputs.rocm_version }}' \
+            --rocm-version "$ROCM_VER" \
             --comfyui-url '${{ inputs.comfyui_url }}' \
             --execution-label '${EXECUTION_LABEL}' \
             --results-dir logs/benchmark_results \
+            "${ARCH_ARGS[@]}" \
             2>&1 | tee logs/console_output.log
           BENCHMARK_EXIT=${PIPESTATUS[0]}
           set -e

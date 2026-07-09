@@ -12,7 +12,7 @@ Exit codes - IMMUTABLE, do not change:
   3  INFRA_ERROR (ComfyUI unreachable, GPU not visible, manifest missing)
 """
 
-import argparse, json, os, subprocess, sys
+import argparse, importlib.util, json, os, subprocess, sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -122,12 +122,35 @@ def resolve_comfyui_path(explicit):
         return None
 
 
+def _fleet_hardware_module():
+    """Load tests/utils/system/hardware.py without importing tests package."""
+    for parent in Path(__file__).resolve().parents:
+        hw_path = parent / "tests" / "utils" / "system" / "hardware.py"
+        if hw_path.is_file():
+            spec = importlib.util.spec_from_file_location("hardware", str(hw_path))
+            if spec is None or spec.loader is None:
+                return None
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+    return None
+
+
 def detect_gpu_arch():
     """Best-effort detection of the ACTUAL hardware arch (gfxNNNN) this run
-    executed on, independent of the requested --gpu_arch selection. Tries torch's
-    reported device arch first, then rocminfo. Returns "" if undetectable. Used
-    to record detected_gpu_arch so the report can flag requested != detected
-    (e.g. a run started with --gpu_arch gfx1100 that actually ran on gfx908)."""
+    executed on, independent of the requested --gpu_arch selection.
+
+    Uses fleet hardware.py first (/opt/rocm*/bin/rocminfo, bm_config, device_id,
+    amd-smi) so CI matches install-job host capture. Falls back to torch, then
+    rocminfo on PATH. Returns "" if undetectable."""
+    try:
+        hw = _fleet_hardware_module()
+        if hw is not None:
+            arch = (hw.detect_gpu_arch() or "").strip().lower()
+            if arch and arch != "unknown":
+                return arch
+    except Exception:
+        pass
     try:
         import torch
         if torch.cuda.is_available():

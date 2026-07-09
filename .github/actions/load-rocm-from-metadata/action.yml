@@ -1,0 +1,66 @@
+name: 'Load ROCM_PATH from /etc/rocm_metadata.conf'
+description: 'Reads ROCM_PATH from /etc/rocm_metadata.conf (ROCmTest metadata file) with filesystem fallbacks'
+
+outputs:
+  rocm-path:
+    description: 'ROCM_PATH value from /etc/rocm_metadata.conf'
+    value: ${{ steps.load-env.outputs.rocm-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Read ROCM_PATH from /etc/rocm_metadata.conf
+      id: load-env
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        ROCM_PATH=""
+
+        # Primary: ROCmTest / TheRock metadata written at install time
+        if [ -f /etc/rocm_metadata.conf ]; then
+          echo "Reading ROCM_PATH from /etc/rocm_metadata.conf..."
+          ROCM_PATH=$(grep -E '^ROCM_PATH\s*=' /etc/rocm_metadata.conf | sed 's/^ROCM_PATH\s*=\s*//' | tr -d ' ' || true)
+          if [ -z "$ROCM_PATH" ]; then
+            ROCM_PATH=$(grep -E '^ROCM_PATH=' /etc/rocm_metadata.conf | cut -d= -f2- | tr -d ' ' || true)
+          fi
+          if [ -n "$ROCM_PATH" ] && [ ! -d "$ROCM_PATH" ]; then
+            echo "::warning::ROCM_PATH from metadata (${ROCM_PATH}) is not on disk — trying filesystem fallback"
+            ROCM_PATH=""
+          fi
+        else
+          echo "::warning::/etc/rocm_metadata.conf not found — falling back to /opt/rocm layout"
+        fi
+
+        # Filesystem fallback (tarball / native DEB / alternatives layout)
+        _pick_rocm_path() {
+          local candidate=""
+          for candidate in \
+            /opt/rocm/core \
+            "$(ls -d /opt/rocm/core-* 2>/dev/null | sort -V | tail -1 || true)" \
+            /opt/rocm \
+            "$(ls -d /opt/rocm-* 2>/dev/null | sort -V | tail -1 || true)"; do
+            if [ -n "$candidate" ] && [ -d "$candidate" ] && { [ -d "$candidate/bin" ] || [ -d "$candidate/lib" ]; }; then
+              echo "$candidate"
+              return 0
+            fi
+          done
+          return 1
+        }
+
+        if [ -z "$ROCM_PATH" ]; then
+          if ROCM_PATH="$(_pick_rocm_path)"; then
+            echo "Resolved ROCM_PATH from filesystem fallback: ${ROCM_PATH}"
+          fi
+        fi
+
+        if [ -z "$ROCM_PATH" ] || [ ! -d "$ROCM_PATH" ]; then
+          echo "::warning::ROCm installation not found on runner '${RUNNER_NAME:-unknown}'."
+          echo "::warning::Expected /etc/rocm_metadata.conf or /opt/rocm / /opt/rocm-* tree."
+          echo "rocm-path=" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        echo "ROCM_PATH: ${ROCM_PATH}"
+        echo "rocm-path=$ROCM_PATH" >> $GITHUB_OUTPUT
+        echo "ROCM_PATH=$ROCM_PATH" >> $GITHUB_ENV

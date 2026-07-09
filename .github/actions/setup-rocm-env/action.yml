@@ -1,0 +1,117 @@
+name: 'Setup ROCm Environment'
+description: 'Sets up ROCm environment variables (LD_LIBRARY_PATH, HIP_DEVICE_LIB_PATH, HIP_PLATFORM, ROCM_PATH, CXX, CC, LIBRARY_PATH, CPLUS_INCLUDE_PATH)'
+
+inputs:
+  enable-ld-library-path:
+    description: 'Export LD_LIBRARY_PATH for ROCm (true/false)'
+    required: false
+    default: 'false'
+  enable-hip-devicelib-path:
+    description: 'Export HIP_DEVICE_LIB_PATH for ROCm (true/false)'
+    required: false
+    default: 'false'
+  enable-hip-platform:
+    description: 'Export HIP_PLATFORM for ROCm (true/false)'
+    required: false
+    default: 'false'
+  enable-rocm-path:
+    description: 'Export ROCM_PATH environment variable (true/false)'
+    required: false
+    default: 'false'
+  enable-cxx:
+    description: 'Export CXX compiler to amdclang++ (true/false)'
+    required: false
+    default: 'false'
+  enable-cc:
+    description: 'Export CC compiler to amdclang (true/false)'
+    required: false
+    default: 'false'
+  enable-hipcc:
+    description: 'Export CXX and CC compilers to hipcc (true/false)'
+    required: false
+    default: 'false'
+  enable-library-path:
+    description: 'Export LIBRARY_PATH for ROCm sysdeps (true/false)'
+    required: false
+    default: 'false'
+  enable-cplus-include-path:
+    description: 'Export CPLUS_INCLUDE_PATH for libdrm (true/false)'
+    required: false
+    default: 'false'
+  enable-hip-path:
+    description: 'Export HIP_PATH for ROCm (true/false)'
+    required: false
+    default: 'false'
+  enable-rocm-install-dir:
+    description: 'Export ROCM_INSTALL_DIR for ROCm (true/false)'
+    required: false
+    default: 'false'
+  enable-opencl-icd:
+    description: 'Fix OpenCL ICD vendor file to point to correct libamdocl64.so path (true/false)'
+    required: false
+    default: 'false'
+  enable-libva-drivers-path:
+    description: 'Export LIBVA_DRIVERS_PATH for VA-API driver discovery in rocm_sysdeps (true/false)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Load ROCM_PATH from /etc/rocm_metadata.conf
+      id: load-env
+      uses: ./.github/actions/load-rocm-from-metadata
+
+    - name: Configure ROCm environment variables
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        ROCM_PATH="${{ steps.load-env.outputs.rocm-path }}"
+        if [ -z "$ROCM_PATH" ]; then
+          echo "::warning::ROCM_PATH not resolved — skipping ROCm env setup"
+          exit 0
+        fi
+        echo "Setting up ROCm environment..."
+        echo "ROCM_PATH: ${ROCM_PATH}"
+
+        LLVM_ROOT="${ROCM_PATH}/llvm"
+        if [ ! -d "$LLVM_ROOT" ] && [ -d /opt/rocm/llvm ]; then
+          LLVM_ROOT=/opt/rocm/llvm
+          echo "Using LLVM root from /opt/rocm/llvm (alternatives layout)"
+        fi
+        LIB_ROOT="${ROCM_PATH}/lib"
+        if [ ! -d "$LIB_ROOT" ] && [ -d /opt/rocm/lib ]; then
+          LIB_ROOT=/opt/rocm/lib
+        fi
+        SYSDEPS_LIB="${ROCM_PATH}/lib/rocm_sysdeps/lib"
+        if [ ! -d "$SYSDEPS_LIB" ] && [ -d /opt/rocm/lib/rocm_sysdeps/lib ]; then
+          SYSDEPS_LIB=/opt/rocm/lib/rocm_sysdeps/lib
+        fi
+
+        echo "PATH=${ROCM_PATH}/bin:${PATH:+:$PATH}" >> "$GITHUB_ENV"
+
+        if [[ "${{ inputs.enable-rocm-path }}" == "true" ]]; then
+          echo "ROCM_PATH=${ROCM_PATH}" >> "$GITHUB_ENV"
+        fi
+
+        if [[ "${{ inputs.enable-ld-library-path }}" == "true" ]]; then
+          LD_LIB_PARTS="${LIB_ROOT}/:${SYSDEPS_LIB}/"
+          if [ -d "${LLVM_ROOT}/lib" ]; then
+            LD_LIB_PARTS="${LD_LIB_PARTS}:${LLVM_ROOT}/lib/"
+          fi
+          echo "LD_LIBRARY_PATH=${LD_LIB_PARTS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+        fi
+
+        if [[ "${{ inputs.enable-hip-platform }}" == "true" ]]; then
+          echo "HIP_PLATFORM=amd" >> "$GITHUB_ENV"
+        fi
+
+        if [[ "${{ inputs.enable-hip-devicelib-path }}" == "true" ]]; then
+          HIP_BITCODE="${LLVM_ROOT}/amdgcn/bitcode/"
+          if [ -d "$HIP_BITCODE" ]; then
+            echo "HIP_DEVICE_LIB_PATH=${HIP_BITCODE}" >> "$GITHUB_ENV"
+          fi
+        fi
+
+        echo "✅ ROCm environment configured from ${ROCM_PATH}"
