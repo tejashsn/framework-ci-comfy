@@ -1,0 +1,110 @@
+# Composite action to cleanup Docker resources
+# Ensures clean state for next run on the node
+#
+# Usage:
+#   - uses: ./.github/actions/docker-cleanup
+#     with:
+#       image: 'rocm/vllm:latest'  # Optional: specific image to cleanup
+#       prune_all: 'false'         # Optional: prune all unused resources
+
+name: 'Docker Cleanup'
+description: 'Cleanup Docker containers, images, and resources'
+
+inputs:
+  image:
+    description: 'Docker image to cleanup containers for (optional)'
+    required: false
+    default: ''
+  prune_all:
+    description: 'Prune all unused Docker resources (images, volumes, networks)'
+    required: false
+    default: 'false'
+  prune_volumes:
+    description: 'Also prune volumes (use with caution)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cleanup Docker resources
+      shell: bash
+      run: |
+        set +e  # Don't exit on errors
+        
+        # Helper: run docker with or without sudo
+        run_docker() {
+          if docker info >/dev/null 2>&1; then
+            docker "$@"
+          else
+            sudo docker "$@"
+          fi
+        }
+        
+        echo "🧹 Docker Cleanup Starting..."
+        
+        # 1. Stop and remove containers from specific image (if provided)
+        if [ -n "${{ inputs.image }}" ]; then
+          echo "  Cleaning containers for image: ${{ inputs.image }}"
+          
+          # Get all containers (running + stopped) from this image
+          CONTAINERS=$(run_docker ps -aq --filter "ancestor=${{ inputs.image }}" 2>/dev/null || true)
+          if [ -n "$CONTAINERS" ]; then
+            echo "  Found $(echo $CONTAINERS | wc -w) container(s)"
+            # Stop running containers first
+            run_docker stop $CONTAINERS 2>/dev/null || true
+            # Remove containers
+            run_docker rm -f $CONTAINERS 2>/dev/null || true
+            echo "  ✓ Containers removed"
+          else
+            echo "  No containers found for this image"
+          fi
+        fi
+        
+        # 2. Remove any exited containers (cleanup from previous failed runs)
+        EXITED=$(run_docker ps -aq --filter "status=exited" 2>/dev/null || true)
+        if [ -n "$EXITED" ]; then
+          EXITED_COUNT=$(echo $EXITED | wc -w)
+          echo "  Removing $EXITED_COUNT exited container(s)..."
+          run_docker rm -f $EXITED 2>/dev/null || true
+          echo "  ✓ Exited containers removed"
+        fi
+        
+        # 3. Remove any dead containers
+        DEAD=$(run_docker ps -aq --filter "status=dead" 2>/dev/null || true)
+        if [ -n "$DEAD" ]; then
+          DEAD_COUNT=$(echo $DEAD | wc -w)
+          echo "  Removing $DEAD_COUNT dead container(s)..."
+          run_docker rm -f $DEAD 2>/dev/null || true
+          echo "  ✓ Dead containers removed"
+        fi
+        
+        # 4. Prune all unused resources if requested
+        if [ "${{ inputs.prune_all }}" = "true" ]; then
+          echo "  Pruning unused Docker resources..."
+          
+          # Prune containers
+          run_docker container prune -f 2>/dev/null || true
+          
+          # Prune images (dangling only by default)
+          run_docker image prune -f 2>/dev/null || true
+          
+          # Prune networks
+          run_docker network prune -f 2>/dev/null || true
+          
+          # Prune volumes only if explicitly requested (can lose data!)
+          if [ "${{ inputs.prune_volumes }}" = "true" ]; then
+            echo "  ⚠️  Pruning unused volumes..."
+            run_docker volume prune -f 2>/dev/null || true
+          fi
+          
+          echo "  ✓ Docker resources pruned"
+        fi
+        
+        # 5. Show remaining disk usage
+        echo ""
+        echo "  Docker disk usage:"
+        run_docker system df 2>/dev/null || true
+        
+        echo ""
+        echo "✅ Docker cleanup complete"

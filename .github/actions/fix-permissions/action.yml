@@ -1,0 +1,155 @@
+# Composite action to fix file permissions
+# Handles root-owned files created by Docker containers
+# Ensures next run can access/delete all files
+#
+# Usage:
+#   - uses: ./.github/actions/fix-permissions
+#   - uses: ./.github/actions/fix-permissions
+#     with:
+#       paths: 'logs results'
+#       clean_paths: '.cache __pycache__'
+
+name: 'Fix Permissions'
+description: 'Fix ownership and permissions for Docker-created files'
+
+inputs:
+  paths:
+    description: 'Space-separated paths to fix permissions on (defaults to workspace)'
+    required: false
+    default: ''
+  clean_paths:
+    description: 'Space-separated paths to remove completely (optional)'
+    required: false
+    default: ''
+  make_deletable:
+    description: 'Ensure all files can be deleted by next run (true/false)'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Fix ownership and permissions
+      shell: bash
+      run: |
+        set +e  # Don't exit on errors - we want to try all methods
+        
+        echo "🔧 Fixing permissions..."
+        
+        # Get current user info
+        CURRENT_USER=$(whoami)
+        CURRENT_UID=$(id -u)
+        CURRENT_GID=$(id -g)
+        
+        echo "  User: $CURRENT_USER (UID: $CURRENT_UID, GID: $CURRENT_GID)"
+        
+        # Determine paths to fix
+        PATHS="${{ inputs.paths }}"
+        if [ -z "$PATHS" ]; then
+          # Default to workspace if not specified
+          PATHS="${GITHUB_WORKSPACE:-.}"
+        fi
+        
+        # Function to fix ownership with multiple fallback methods
+        fix_path() {
+          local path="$1"
+          
+          if [ ! -e "$path" ]; then
+            echo "  ⚠️  Path does not exist: $path"
+            return 0
+          fi
+          
+          echo "  Fixing: $path"
+          
+          # Method 1: Direct chown (works if we own parent or have permissions)
+          if chown -R "$CURRENT_UID:$CURRENT_GID" "$path" 2>/dev/null; then
+            echo "    ✓ Ownership fixed (direct)"
+            return 0
+          fi
+          
+          # Method 2: sudo without password (works on most CI runners)
+          if sudo -n chown -R "$CURRENT_UID:$CURRENT_GID" "$path" 2>/dev/null; then
+            echo "    ✓ Ownership fixed (sudo -n)"
+            return 0
+          fi
+          
+          # Method 3: sudo with potential password prompt (last resort)
+          if sudo chown -R "$CURRENT_UID:$CURRENT_GID" "$path" 2>/dev/null; then
+            echo "    ✓ Ownership fixed (sudo)"
+            return 0
+          fi
+          
+          echo "    ⚠️  Could not fix ownership for: $path"
+          return 1
+        }
+        
+        # Function to ensure files are deletable
+        make_deletable() {
+          local path="$1"
+          
+          if [ ! -e "$path" ]; then
+            return 0
+          fi
+          
+          # Add write permission to directories (needed for deletion)
+          # Add read+write to files (needed for modification)
+          chmod -R u+rwX "$path" 2>/dev/null || \
+          sudo -n chmod -R u+rwX "$path" 2>/dev/null || \
+          sudo chmod -R u+rwX "$path" 2>/dev/null || true
+          
+          # Handle any immutable files (rare but possible)
+          # Remove immutable attribute if set
+          if command -v chattr >/dev/null 2>&1; then
+            chattr -R -i "$path" 2>/dev/null || \
+            sudo -n chattr -R -i "$path" 2>/dev/null || true
+          fi
+        }
+        
+        # Fix ownership for each path
+        for path in $PATHS; do
+          fix_path "$path"
+          
+          if [ "${{ inputs.make_deletable }}" = "true" ]; then
+            make_deletable "$path"
+          fi
+        done
+        
+        # Clean specified paths
+        CLEAN_PATHS="${{ inputs.clean_paths }}"
+        if [ -n "$CLEAN_PATHS" ]; then
+          echo ""
+          echo "🗑️  Cleaning paths..."
+          
+          for path in $CLEAN_PATHS; do
+            if [ -e "$path" ]; then
+              echo "  Removing: $path"
+              
+              # First fix permissions so we can delete
+              fix_path "$path"
+              make_deletable "$path"
+              
+              # Try multiple methods to remove
+              if rm -rf "$path" 2>/dev/null; then
+                echo "    ✓ Removed (direct)"
+              elif sudo -n rm -rf "$path" 2>/dev/null; then
+                echo "    ✓ Removed (sudo -n)"
+              elif sudo rm -rf "$path" 2>/dev/null; then
+                echo "    ✓ Removed (sudo)"
+              else
+                echo "    ⚠️  Could not remove: $path"
+              fi
+            fi
+          done
+        fi
+        
+        echo ""
+        echo "✅ Permissions fix complete"
+        
+        # Verify workspace is accessible
+        if [ -d "${GITHUB_WORKSPACE:-.}" ]; then
+          if [ -w "${GITHUB_WORKSPACE:-.}" ]; then
+            echo "  Workspace is writable ✓"
+          else
+            echo "  ⚠️  Workspace may not be writable"
+          fi
+        fi

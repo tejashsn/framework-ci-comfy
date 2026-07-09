@@ -1,0 +1,65 @@
+# Composite action to capture host system configuration
+# Captures GPU, CPU, ROCm info BEFORE Docker runs
+#
+# Usage:
+#   - uses: ./.github/actions/capture-host-info
+#     with:
+#       output_path: 'logs/bm_config.json'
+
+name: 'Capture Host Info'
+description: 'Capture host system configuration (GPU, CPU, ROCm) for database upload'
+
+inputs:
+  output_path:
+    description: 'Output JSON file path'
+    required: false
+    default: 'logs/bm_config.json'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Capture host config
+      shell: bash
+      run: |
+        mkdir -p $(dirname ${{ inputs.output_path }})
+        
+        echo ""
+        echo "============================================================"
+        echo "[CMD] Capture Host Info"
+        echo "[CMD] Output: ${{ inputs.output_path }}"
+        echo "[CMD] Command: python3 scripts/capture_system_info.py --output ${{ inputs.output_path }} --no-packages"
+        echo "============================================================"
+        echo ""
+        
+        python3 scripts/capture_system_info.py \
+          --output ${{ inputs.output_path }} \
+          --no-packages
+        
+        if [ -f "${{ inputs.output_path }}" ]; then
+          echo "✅ Host config saved to: ${{ inputs.output_path }}"
+          python3 << PYTHON_SCRIPT 2>/dev/null || true
+        import json
+        with open('${{ inputs.output_path }}') as f:
+            d = json.load(f)
+            gpu = d.get('gpu', {})
+            cpu = d.get('cpu', {})
+            print(f"  GPU: {gpu.get('marketing_name', 'Unknown')} x{gpu.get('count', 0)}")
+            print(f"  CPU: {cpu.get('model', 'Unknown')}")
+            print(f"  ROCm: {d.get('rocm_version', 'Unknown')}")
+        PYTHON_SCRIPT
+        else
+          echo "⚠️ Host config capture failed"
+        fi
+
+    - name: Capture BKC version
+      shell: bash
+      run: |
+        echo "Detecting BKC firmware version..."
+        python3 scripts/get_bkc.py --github-env --save-to logs/bkc.txt 2>/dev/null || true
+        if [ -f logs/bkc.txt ] && [ -s logs/bkc.txt ]; then
+          BKC=$(cat logs/bkc.txt)
+          echo "BKC_VERSION=$BKC" >> $GITHUB_ENV
+          echo "✅ BKC Version: $BKC"
+        else
+          echo "⚠️ BKC version not available (platypi not found or query failed)"
+        fi

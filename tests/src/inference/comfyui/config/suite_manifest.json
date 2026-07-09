@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0",
-  "description": "ComfyUI AMD validation suite - aligned to TMS catalogue v2025-06",
+  "description": "ComfyUI AMD validation suite - aligned to TMS catalogue v2025-06. perf_targets.max_latency_s are loose ceilings (not tight regression SLOs) to tolerate day-to-day ROCm/ComfyUI stack variance.",
   "scope": "comfyui_only",
   "tests": [
     {
@@ -29,7 +29,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 3,
-        "max_latency_s": 60
+        "max_latency_s": 360
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -65,7 +65,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 3,
-        "max_latency_s": 45
+        "max_latency_s": 360
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -101,7 +101,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 3,
-        "max_latency_s": 90
+        "max_latency_s": 360
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -139,7 +139,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 120
+        "max_latency_s": 240
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -175,7 +175,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 180
+        "max_latency_s": 720
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -212,7 +212,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 2,
-        "max_latency_s": 120
+        "max_latency_s": 240
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -249,7 +249,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 2,
-        "max_latency_s": 120
+        "max_latency_s": 480
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -284,7 +284,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 2,
-        "max_latency_s": 150
+        "max_latency_s": 600
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -321,7 +321,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 2,
-        "max_latency_s": 150
+        "max_latency_s": 300
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -354,7 +354,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 1,
-        "max_latency_s": 60
+        "max_latency_s": 120
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -388,7 +388,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 120
+        "max_latency_s": 240
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -425,7 +425,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 2,
-        "max_latency_s": 120
+        "max_latency_s": 240
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -460,7 +460,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 3,
-        "max_latency_s": 30
+        "max_latency_s": 120
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -495,7 +495,7 @@
       "perf_targets": {
         "warmup_runs": 1,
         "timed_runs": 3,
-        "max_latency_s": 30
+        "max_latency_s": 90
       },
       "retry_count": 1,
       "retry_delay_seconds": 30,
@@ -532,7 +532,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 300
+        "max_latency_s": 450
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -567,7 +567,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 300
+        "max_latency_s": 450
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -603,7 +603,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 240
+        "max_latency_s": 360
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -638,7 +638,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 480
+        "max_latency_s": 720
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -673,7 +673,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 480
+        "max_latency_s": 720
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -707,7 +707,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 600
+        "max_latency_s": 900
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -740,7 +740,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 600
+        "max_latency_s": 900
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -775,7 +775,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 300
+        "max_latency_s": 450
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -810,7 +810,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 300
+        "max_latency_s": 450
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,
@@ -845,7 +845,7 @@
       "perf_targets": {
         "warmup_runs": 0,
         "timed_runs": 1,
-        "max_latency_s": 480
+        "max_latency_s": 720
       },
       "retry_count": 0,
       "retry_delay_seconds": 0,

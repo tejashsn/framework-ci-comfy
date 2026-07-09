@@ -1,0 +1,156 @@
+# Composite action to set job info and create summary
+#
+# Usage (benchmark per-model - vLLM etc.):
+#   - uses: ./.github/actions/job-info
+#     with:
+#       model: ${{ matrix.model }}
+#       runner_label: ${{ matrix.runner_label }}
+#       execution_mode: ${{ inputs.execution_mode || 'docker' }}
+#
+# Usage (functional UT - JAX, Apex, any new test):
+#   - uses: ./.github/actions/job-info
+#     with:
+#       user_inputs: ${{ toJSON(inputs) }}
+
+name: 'Job Info'
+description: 'Set job environment variables and create summary'
+
+inputs:
+  model:
+    description: 'Model name (for benchmark workflows)'
+    required: false
+    default: ''
+  runner_label:
+    description: 'Runner label'
+    required: false
+    default: ''
+  docker_image:
+    description: 'Docker image'
+    required: false
+    default: ''
+  benchmark_type:
+    description: 'Benchmark type (for benchmark workflows)'
+    required: false
+    default: ''
+  execution_mode:
+    description: 'Execution mode (docker, wheel, baremetal)'
+    required: false
+    default: ''
+  user_inputs:
+    description: 'JSON string of all workflow inputs - pass toJSON(inputs). Automatically renders User Inputs table.'
+    required: false
+    default: '{}'
+  extra_info:
+    description: 'Extra markdown to append (fallback for truly custom cases)'
+    required: false
+    default: ''
+
+outputs:
+  runner_host:
+    description: 'Runner hostname'
+    value: ${{ steps.info.outputs.runner_host }}
+  model_slug:
+    description: 'Model slug (safe for filenames)'
+    value: ${{ steps.info.outputs.model_slug }}
+  artifact_url:
+    description: 'URL to artifacts'
+    value: ${{ steps.info.outputs.artifact_url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set job info
+      id: info
+      shell: bash
+      run: |
+        RUNNER_HOST=$(hostname)
+        MODEL_SLUG=$(echo "${{ inputs.model }}" | tr '/' '-' | tr ':' '-')
+        ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+        echo "runner_host=$RUNNER_HOST" >> $GITHUB_OUTPUT
+        echo "model_slug=$MODEL_SLUG" >> $GITHUB_OUTPUT
+        echo "artifact_url=$ARTIFACT_URL" >> $GITHUB_OUTPUT
+
+        echo "RUNNER_HOST=$RUNNER_HOST" >> $GITHUB_ENV
+        echo "MODEL_SLUG=$MODEL_SLUG" >> $GITHUB_ENV
+        echo "ARTIFACT_URL=$ARTIFACT_URL" >> $GITHUB_ENV
+
+        echo "## 🚀 Test Execution" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Benchmark per-model: minimal table (model is set)
+        # Functional UT: full table (model is empty)
+        if [ -n "${{ inputs.model }}" ]; then
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Runner Label** | \`${{ inputs.runner_label }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Runner Host** | \`$RUNNER_HOST\` |" >> $GITHUB_STEP_SUMMARY
+          MODE="${{ inputs.execution_mode }}"
+          echo "| **Mode** | \`${MODE:-docker}\` |" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### Job Info" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Host** | \`$RUNNER_HOST\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Run ID** | \`${{ github.run_id }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered By** | \`${{ github.actor }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Event** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ inputs.runner_label }}" ]; then
+            echo "| **Runner Label** | \`${{ inputs.runner_label }}\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${{ inputs.docker_image }}" ]; then
+            echo "| **Docker Image** | \`${{ inputs.docker_image }}\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "${BKC_VERSION:-}" ]; then
+            echo "| **BKC Firmware** | \`$BKC_VERSION\` |" >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+
+    - name: Render user inputs
+      if: inputs.user_inputs != '{}'
+      shell: python
+      env:
+        USER_INPUTS_JSON: ${{ inputs.user_inputs }}
+        SUMMARY_FILE: ${{ github.step_summary }}
+      run: |
+        import json, os, sys
+
+        raw = os.environ.get("USER_INPUTS_JSON", "{}")
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
+
+        try:
+            data = json.loads(raw)
+        except Exception:
+            sys.exit(0)
+
+        if not data or not isinstance(data, dict):
+            sys.exit(0)
+
+        items = {k: v for k, v in data.items() if v is not None and str(v).strip() != ""}
+        if not items:
+            sys.exit(0)
+
+        def fmt_key(k):
+            return k.replace("_", " ").replace("-", " ").title()
+
+        lines = ["", "### User Inputs", "| Parameter | Value |", "|-----------|-------|"]
+        for key in items:
+            val = str(items[key]).strip()
+            lines.append(f"| **{fmt_key(key)}** | `{val}` |")
+
+        if summary_path:
+            with open(summary_path, "a") as f:
+                f.write("\n".join(lines) + "\n")
+
+    - name: Render extra info
+      if: inputs.extra_info != ''
+      shell: bash
+      run: |
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "${{ inputs.extra_info }}" >> $GITHUB_STEP_SUMMARY
+
+    - name: Summary footer
+      shell: bash
+      run: |
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "---" >> $GITHUB_STEP_SUMMARY
