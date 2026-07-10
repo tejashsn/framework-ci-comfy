@@ -44,6 +44,8 @@ def parse_args():
     p.add_argument("--max_timed_runs",   type=int, default=0,
                    help="Cap timed runs (0 = use manifest perf_targets value). "
                         "Useful on slow hardware to avoid multi-pass timeouts.")
+    p.add_argument("--comfyui_pid",      default=None,
+                   help="ComfyUI server PID from CI lifecycle (for crash detection)")
     return p.parse_args()
 
 
@@ -200,6 +202,7 @@ def check_output_writable(comfy_path):
 
 
 
+
 def detect_vram_mb(python=None):
     """Return (total_mb, free_mb) via torch.cuda.mem_get_info, or (0, 0) on failure."""
     python = python or sys.executable
@@ -337,6 +340,8 @@ def main():
             print(f"[DRY_RUN] Workflow found: {workflow_path}")
         print(f"[DRY_RUN] OK - {args.execute} ({args.gpu_arch} / {args.os_version})")
         write_gha_output("result", "DRY_RUN_OK")
+        sys.exit(0)
+
     detected_arch = detect_gpu_arch()
     should_skip, skip_reason, skip_details = check_capability_gate(test, detected_arch)
     if should_skip:
@@ -382,7 +387,7 @@ def main():
         except Exception:
             missing = []
         if missing and fetch_models.auto_fetch_enabled():
-            print(f"[fetch] {len(missing)} model(s) missing â€” starting auto-download")
+            print(f"[fetch] {len(missing)} model(s) missing — starting auto-download")
             fr = fetch_models.ensure_missing(missing, comfy_path)
             for err in fr.errors:
                 print(f"[fetch] {err}")
@@ -402,7 +407,7 @@ def main():
             write_gha_output("result", "SKIP")
             write_gha_output("skip_reason", "model_missing")
             sys.exit(2)
-        # Identity check: wrong file on disk â€” try re-fetch when auto-fetch on.
+        # Identity check: wrong file on disk — try re-fetch when auto-fetch on.
         try:
             mismatches = model_check.identity_mismatches(workflow_file, comfy_path)
         except Exception:
@@ -478,30 +483,38 @@ def main():
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_min * 60 + 30)
     except subprocess.TimeoutExpired:
+        import comfyui_runtime
         dur = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
-        reason = (f"timeout after {timeout_min} min "
-                  f"(hardware too slow for configured passes)")
-        print(f"[FAIL] {args.execute} timed out after {timeout_min} min "
-              f"-- reason: {reason}", file=sys.stderr)
-        # A timeout is a prime crash/hang case - snapshot the server log so the
-        # GPU/HIP hang traceback is preserved beside this test (always write, so
-        # the evidence file exists for this non-PASS path too).
-        tail = capture_server_tail(evidence_dir, always_write=True)
+        pid = args.comfyui_pid or os.environ.get("COMFYUI_SERVER_PID")
+        alive = comfyui_runtime.pid_alive(pid) if pid else None
+        tail = capture_server_tail(evidence_dir, max_lines=100, always_write=True)
         last = [ln for ln in tail.splitlines() if ln.strip()]
+        if alive is False:
+            verdict = "INFRA_ERROR"
+            reason = f"server_died_mid_test after {timeout_min} min"
+            fail_key, fail_val = "infra_error", "server_died_mid_test"
+            exit_code = 3
+        else:
+            verdict = "FAIL"
+            reason = f"timeout after {timeout_min} min (inference too slow)"
+            fail_key, fail_val = "fail_reason", "timeout"
+            exit_code = 1
         if last:
             reason += f" | comfyui_server last line: {last[-1][:200]}"
+        print(f"[{verdict}] {args.execute} timed out after {timeout_min} min "
+              f"-- reason: {reason}", file=sys.stderr)
         (evidence_dir / "summary.json").write_text(json.dumps({
             "test_name": args.execute, "tms_key": test["tms_key"],
             "execution_label": args.execution_label, "rocm_version": args.rocm_version,
             "gpu_arch": args.gpu_arch, "detected_gpu_arch": detect_gpu_arch(),
             "os_version": args.os_version,
-            "verdict": "FAIL", "failure_reason": reason, "io_error": False,
+            "verdict": verdict, "failure_reason": reason, "io_error": False,
             "server_log_tail": "comfyui_server_tail.log", "duration_s": dur,
             "timestamp": ts, "evidence_dir": str(evidence_dir),
         }, indent=2))
-        write_gha_output("result", "FAIL")
-        write_gha_output("fail_reason", "timeout")
-        sys.exit(1)
+        write_gha_output("result", verdict)
+        write_gha_output(fail_key, fail_val)
+        sys.exit(exit_code)
 
     duration_s = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
 
