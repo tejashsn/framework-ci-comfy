@@ -58,7 +58,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Load ROCM_PATH from /etc/rocm_metadata.conf
+    - name: Load ROCM_PATH from metadata
       id: load-env
       uses: ./.github/actions/load-rocm-from-metadata
 
@@ -74,6 +74,26 @@ runs:
         fi
         echo "Setting up ROCm environment..."
         echo "ROCM_PATH: ${ROCM_PATH}"
+
+        # Windows TheRock: HIP_PATH + bin/llvm/bin on PATH (no LD_LIBRARY_PATH)
+        if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+          PATH_PARTS=("${ROCM_PATH}/bin")
+          if [ -d "${ROCM_PATH}/lib/llvm/bin" ]; then
+            PATH_PARTS+=("${ROCM_PATH}/lib/llvm/bin")
+          elif [ -d "${ROCM_PATH}/llvm/bin" ]; then
+            PATH_PARTS+=("${ROCM_PATH}/llvm/bin")
+          fi
+          echo "PATH=${PATH_PARTS[*]}:${PATH}" >> "$GITHUB_ENV"
+          if [[ "${{ inputs.enable-rocm-path }}" == "true" ]] || [[ "${{ inputs.enable-hip-path }}" == "true" ]]; then
+            echo "ROCM_PATH=${ROCM_PATH}" >> "$GITHUB_ENV"
+            echo "HIP_PATH=${ROCM_PATH}" >> "$GITHUB_ENV"
+          fi
+          if [[ "${{ inputs.enable-hip-platform }}" == "true" ]]; then
+            echo "HIP_PLATFORM=amd" >> "$GITHUB_ENV"
+          fi
+          echo "✅ Windows ROCm environment configured from ${ROCM_PATH}"
+          exit 0
+        fi
 
         LLVM_ROOT="${ROCM_PATH}/llvm"
         if [ ! -d "$LLVM_ROOT" ] && [ -d /opt/rocm/llvm ]; then

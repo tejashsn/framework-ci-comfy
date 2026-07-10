@@ -1,15 +1,15 @@
-name: 'Load ROCM_PATH from /etc/rocm_metadata.conf'
-description: 'Reads ROCM_PATH from /etc/rocm_metadata.conf (ROCmTest metadata file) with filesystem fallbacks'
+name: 'Load ROCM_PATH from metadata'
+description: 'Reads ROCM_PATH from Linux /etc/rocm_metadata.conf or Windows TheRock metadata.conf with filesystem fallbacks'
 
 outputs:
   rocm-path:
-    description: 'ROCM_PATH value from /etc/rocm_metadata.conf'
+    description: 'Resolved ROCm install root'
     value: ${{ steps.load-env.outputs.rocm-path }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Read ROCM_PATH from /etc/rocm_metadata.conf
+    - name: Resolve ROCM_PATH
       id: load-env
       shell: bash
       run: |
@@ -17,50 +17,91 @@ runs:
 
         ROCM_PATH=""
 
-        # Primary: ROCmTest / TheRock metadata written at install time
-        if [ -f /etc/rocm_metadata.conf ]; then
-          echo "Reading ROCM_PATH from /etc/rocm_metadata.conf..."
-          ROCM_PATH=$(grep -E '^ROCM_PATH\s*=' /etc/rocm_metadata.conf | sed 's/^ROCM_PATH\s*=\s*//' | tr -d ' ' || true)
-          if [ -z "$ROCM_PATH" ]; then
-            ROCM_PATH=$(grep -E '^ROCM_PATH=' /etc/rocm_metadata.conf | cut -d= -f2- | tr -d ' ' || true)
+        _read_ini_key() {
+          local file="$1" key="$2"
+          if [[ ! -f "$file" ]]; then
+            return 1
           fi
-          if [ -n "$ROCM_PATH" ] && [ ! -d "$ROCM_PATH" ]; then
-            echo "::warning::ROCM_PATH from metadata (${ROCM_PATH}) is not on disk — trying filesystem fallback"
+          grep -E "^${key}[[:space:]]*=" "$file" 2>/dev/null \
+            | sed 's/^[^=]*=[[:space:]]*//' | tr -d ' \r' | head -1
+        }
+
+        _validate_rocm_path() {
+          local candidate="$1"
+          [[ -n "$candidate" ]] && [[ -d "$candidate" ]] \
+            && { [[ -d "$candidate/bin" ]] || [[ -d "$candidate/lib" ]]; }
+        }
+
+        # Env overrides (Windows TheRock / manual runner config)
+        for candidate in "${HIP_PATH:-}" "${ROCM_PATH:-}"; do
+          if _validate_rocm_path "$candidate"; then
+            ROCM_PATH="$candidate"
+            echo "ROCM_PATH from environment: ${ROCM_PATH}"
+            break
+          fi
+        done
+
+        # Linux: ROCmTest / TheRock metadata at install time
+        if [[ -z "$ROCM_PATH" ]] && [[ -f /etc/rocm_metadata.conf ]]; then
+          echo "Reading ROCM_PATH from /etc/rocm_metadata.conf..."
+          ROCM_PATH="$(_read_ini_key /etc/rocm_metadata.conf ROCM_PATH || true)"
+          if ! _validate_rocm_path "$ROCM_PATH"; then
+            echo "::warning::ROCM_PATH from /etc/rocm_metadata.conf invalid — trying fallbacks"
             ROCM_PATH=""
           fi
-        else
-          echo "::warning::/etc/rocm_metadata.conf not found — falling back to /opt/rocm layout"
         fi
 
-        # Filesystem fallback (tarball / native DEB / alternatives layout)
-        _pick_rocm_path() {
-          local candidate=""
+        # Windows: TheRock metadata.conf (tarball extract layout)
+        if [[ -z "$ROCM_PATH" ]]; then
+          for meta in \
+            "/c/TheRock/build/metadata.conf" \
+            "/c/TheRock/rocm-"*/metadata.conf; do
+            if [[ -f "$meta" ]]; then
+              candidate="$(_read_ini_key "$meta" ROCM_PATH || true)"
+              if _validate_rocm_path "$candidate"; then
+                ROCM_PATH="$candidate"
+                echo "ROCM_PATH from ${meta}: ${ROCM_PATH}"
+                break
+              fi
+            fi
+          done
+        fi
+
+        # Linux filesystem fallback (tarball / native DEB / alternatives layout)
+        if [[ -z "$ROCM_PATH" ]]; then
           for candidate in \
             /opt/rocm/core \
             "$(ls -d /opt/rocm/core-* 2>/dev/null | sort -V | tail -1 || true)" \
             /opt/rocm \
             "$(ls -d /opt/rocm-* 2>/dev/null | sort -V | tail -1 || true)"; do
-            if [ -n "$candidate" ] && [ -d "$candidate" ] && { [ -d "$candidate/bin" ] || [ -d "$candidate/lib" ]; }; then
-              echo "$candidate"
-              return 0
+            if _validate_rocm_path "$candidate"; then
+              ROCM_PATH="$candidate"
+              echo "Resolved ROCM_PATH from Linux filesystem fallback: ${ROCM_PATH}"
+              break
             fi
           done
-          return 1
-        }
-
-        if [ -z "$ROCM_PATH" ]; then
-          if ROCM_PATH="$(_pick_rocm_path)"; then
-            echo "Resolved ROCM_PATH from filesystem fallback: ${ROCM_PATH}"
-          fi
         fi
 
-        if [ -z "$ROCM_PATH" ] || [ ! -d "$ROCM_PATH" ]; then
+        # Windows filesystem fallback (TheRock nightly trees)
+        if [[ -z "$ROCM_PATH" ]]; then
+          for candidate in \
+            "/c/TheRock/build" \
+            "$(ls -d /c/TheRock/rocm-* 2>/dev/null | sort -V | tail -1 || true)"; do
+            if _validate_rocm_path "$candidate"; then
+              ROCM_PATH="$candidate"
+              echo "Resolved ROCM_PATH from Windows filesystem fallback: ${ROCM_PATH}"
+              break
+            fi
+          done
+        fi
+
+        if [[ -z "$ROCM_PATH" ]] || ! _validate_rocm_path "$ROCM_PATH"; then
           echo "::warning::ROCm installation not found on runner '${RUNNER_NAME:-unknown}'."
-          echo "::warning::Expected /etc/rocm_metadata.conf or /opt/rocm / /opt/rocm-* tree."
-          echo "rocm-path=" >> $GITHUB_OUTPUT
+          echo "::warning::Expected /etc/rocm_metadata.conf, TheRock metadata.conf, HIP_PATH, or /opt/rocm."
+          echo "rocm-path=" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
         echo "ROCM_PATH: ${ROCM_PATH}"
-        echo "rocm-path=$ROCM_PATH" >> $GITHUB_OUTPUT
-        echo "ROCM_PATH=$ROCM_PATH" >> $GITHUB_ENV
+        echo "rocm-path=$ROCM_PATH" >> "$GITHUB_OUTPUT"
+        echo "ROCM_PATH=$ROCM_PATH" >> "$GITHUB_ENV"

@@ -13,6 +13,17 @@ def _get_rocm_tool_path(tool_name: str) -> str:
     therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
     if therock_bin_dir:
         return os.path.join(therock_bin_dir, tool_name)
+    for env_key in ("HIP_PATH", "ROCM_PATH"):
+        base = os.getenv(env_key)
+        if base:
+            for sub in ("bin", os.path.join("lib", "llvm", "bin")):
+                candidate = os.path.join(base, sub, tool_name)
+                if os.name == "nt" and not candidate.lower().endswith(".exe"):
+                    candidate_exe = candidate + ".exe"
+                    if os.path.exists(candidate_exe):
+                        return candidate_exe
+                if os.path.exists(candidate):
+                    return candidate
     if os.path.exists(os.path.join("/opt/rocm/bin", tool_name)):
         return os.path.join("/opt/rocm/bin", tool_name)
     for path in sorted(glob.glob(os.path.join("/opt/rocm*/bin", tool_name)), reverse=True):
@@ -28,6 +39,14 @@ def _get_rocm_path() -> str:
     therock_bin_dir = os.getenv("THEROCK_BIN_DIR")
     if therock_bin_dir:
         return os.path.dirname(therock_bin_dir)
+    for env_key in ("HIP_PATH", "ROCM_PATH"):
+        p = os.getenv(env_key)
+        if p and os.path.isdir(p):
+            return p
+    if os.name == "nt":
+        for p in (r"C:\TheRock\build", *sorted(glob.glob(r"C:\TheRock\rocm-*"), reverse=True)):
+            if os.path.isdir(p):
+                return p
     if os.path.exists("/opt/rocm"):
         return "/opt/rocm"
     for path in sorted(glob.glob("/opt/rocm*/"), reverse=True):
