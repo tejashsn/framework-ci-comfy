@@ -212,7 +212,7 @@ def capture_server_tail(evidence_dir, max_lines=80, always_write=False):
     framework and no shared server log exists."""
     try:
         import comfyui_runtime
-        server_log = comfyui_runtime.SERVER_LOG
+        server_log = comfyui_runtime.get_server_log()
         tail = comfyui_runtime.tail_file(server_log, max_lines)
     except Exception:
         server_log, tail = None, ""
@@ -302,7 +302,7 @@ def main():
         except Exception:
             missing = []
         if missing and fetch_models.auto_fetch_enabled():
-            print(f"[fetch] {len(missing)} model(s) missing — starting auto-download")
+            print(f"[fetch] {len(missing)} model(s) missing â€” starting auto-download")
             fr = fetch_models.ensure_missing(missing, comfy_path)
             for err in fr.errors:
                 print(f"[fetch] {err}")
@@ -322,7 +322,7 @@ def main():
             write_gha_output("result", "SKIP")
             write_gha_output("skip_reason", "model_missing")
             sys.exit(2)
-        # Identity check: wrong file on disk — try re-fetch when auto-fetch on.
+        # Identity check: wrong file on disk â€” try re-fetch when auto-fetch on.
         try:
             mismatches = model_check.identity_mismatches(workflow_file, comfy_path)
         except Exception:

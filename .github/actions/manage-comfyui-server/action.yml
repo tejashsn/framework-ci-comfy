@@ -1,0 +1,100 @@
+name: 'Manage ComfyUI Server'
+description: 'Per-job ComfyUI lifecycle: restart (kill :8188 + fresh start) or stop'
+
+inputs:
+  mode:
+    description: 'restart | stop'
+    required: true
+  comfyui_url:
+    description: 'ComfyUI server URL'
+    required: false
+    default: 'http://127.0.0.1:8188'
+  server_log:
+    description: 'Server stdout/stderr log path'
+    required: false
+    default: 'logs/comfyui_server.log'
+  health_timeout_s:
+    description: 'Seconds to wait for /system_stats after start'
+    required: false
+    default: '120'
+  health_poll_s:
+    description: 'Poll interval for health gate'
+    required: false
+    default: '5'
+  comfyui_pid:
+    description: 'PID to stop (stop mode; defaults to COMFYUI_SERVER_PID)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Restart ComfyUI server
+      if: inputs.mode == 'restart'
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p logs
+        export COMFYUI_SERVER_LOG="${{ inputs.server_log }}"
+        export COMFYUI_URL="${{ inputs.comfyui_url }}"
+        export COMFYUI_HEALTH_TIMEOUT_S="${{ inputs.health_timeout_s }}"
+        export COMFYUI_HEALTH_POLL_S="${{ inputs.health_poll_s }}"
+
+        PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
+        echo "Using Python: $($PY --version 2>&1)"
+        echo "ComfyUI server log: $COMFYUI_SERVER_LOG"
+
+        set +e
+        "$PY" tests/src/inference/comfyui/executors/comfyui_runtime.py restart \
+          --url "$COMFYUI_URL" \
+          --server-log "$COMFYUI_SERVER_LOG" \
+          --health-timeout "$COMFYUI_HEALTH_TIMEOUT_S" \
+          --poll-interval "$COMFYUI_HEALTH_POLL_S"
+        RC=$?
+        set -e
+
+        if [ -f "$COMFYUI_SERVER_LOG" ]; then
+          echo "COMFYUI_SERVER_LOG=$COMFYUI_SERVER_LOG" >> "$GITHUB_ENV"
+        fi
+
+        if [ "$RC" -ne 0 ]; then
+          echo "::error::[INFRA_ERROR] server_start_failed — ComfyUI did not become reachable"
+          if [ -n "${COMFYUI_MODEL_NAME:-}" ]; then
+            mkdir -p logs/benchmark_results
+            "$PY" -m pip install -q -r requirements.txt 2>/dev/null || true
+            "$PY" tests/src/inference/comfyui/comfyui_benchmark.py \
+              --write-infra-result \
+              --model "$COMFYUI_MODEL_NAME" \
+              --results-dir logs/benchmark_results \
+              --infra-error server_start_failed \
+              --comfyui-url "$COMFYUI_URL" \
+              || true
+          fi
+          exit "$RC"
+        fi
+
+        PID="${COMFYUI_SERVER_PID:-}"
+        if [ -z "$PID" ] && [ -n "${GITHUB_OUTPUT:-}" ]; then
+          PID="$(grep -E '^comfyui_pid=' "$GITHUB_OUTPUT" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+        fi
+        if [ -n "$PID" ]; then
+          echo "COMFYUI_SERVER_PID=$PID" >> "$GITHUB_ENV"
+          echo "Started ComfyUI (pid=$PID)"
+        fi
+
+    - name: Stop ComfyUI server
+      if: inputs.mode == 'stop'
+      shell: bash
+      run: |
+        set -euo pipefail
+        export COMFYUI_URL="${{ inputs.comfyui_url }}"
+        PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
+        PID="${{ inputs.comfyui_pid }}"
+        if [ -z "$PID" ]; then
+          PID="${COMFYUI_SERVER_PID:-}"
+        fi
+        ARGS=(stop --url "$COMFYUI_URL")
+        if [ -n "$PID" ]; then
+          ARGS+=(--pid "$PID")
+        fi
+        "$PY" tests/src/inference/comfyui/executors/comfyui_runtime.py "${ARGS[@]}" || true

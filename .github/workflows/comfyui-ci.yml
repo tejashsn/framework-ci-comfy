@@ -1,8 +1,8 @@
 # ComfyUI Validation Workflow
 # Runs ComfyUI GPU validation on AMD GPUs via self-hosted runners (bare metal).
 #
-# No Docker required: ComfyUI must already be running on the runner host
-# (default http://127.0.0.1:8188). Model weights live under COMFYUI_PATH/models/.
+# No Docker required. Each benchmark job restarts ComfyUI (kill :8188 + fresh
+# start) via manage-comfyui-server. Model weights live under COMFYUI_PATH/models/.
 #
 # Triggers:
 #   - Manual (workflow_dispatch)
@@ -191,6 +191,7 @@ jobs:
       COMFYUI_MODEL_NAME: ${{ matrix.model }}
       COMFYUI_PATH: ${{ inputs.comfyui_path || vars.COMFYUI_PATH || '' }}
       COMFYUI_PYTHON: ${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}
+      COMFYUI_SERVER_LOG: logs/comfyui_server.log
       UPLOAD_TO_ARTIFACTORY: ${{ inputs.upload_to_artifactory || false }}
 
     steps:
@@ -306,7 +307,17 @@ jobs:
             --detect-gpu-arch \
             --output-file "$GITHUB_OUTPUT"
 
+      - name: Manage ComfyUI (start)
+        uses: ./.github/actions/manage-comfyui-server
+        with:
+          mode: restart
+          comfyui_url: ${{ inputs.comfyui_url }}
+          server_log: logs/comfyui_server.log
+          health_timeout_s: '120'
+          health_poll_s: '5'
+
       - name: Run ComfyUI validation
+        if: success()
         run: |
           set -euo pipefail
           mkdir -p logs/benchmark_results
@@ -368,6 +379,13 @@ jobs:
 
           echo "BENCHMARK_EXIT_CODE=$BENCHMARK_EXIT" >> "$GITHUB_ENV"
           exit $BENCHMARK_EXIT
+
+      - name: Manage ComfyUI (stop)
+        if: always()
+        uses: ./.github/actions/manage-comfyui-server
+        with:
+          mode: stop
+          comfyui_url: ${{ inputs.comfyui_url }}
 
       - name: Generate model summary
         if: always()

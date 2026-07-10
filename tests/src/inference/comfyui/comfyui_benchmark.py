@@ -80,6 +80,12 @@ def detect_arch():
         return ""
 
 
+def detect_os_version():
+    if sys.platform.startswith("win"):
+        return "windows"
+    return "linux"
+
+
 # --------------------------------------------------------------------------- #
 # config
 # --------------------------------------------------------------------------- #
@@ -131,11 +137,14 @@ def run_one(entry, args):
         "--execution_label", args.execution_label or "manual",
         "--rocm_version", args.rocm_version or "unknown",
         "--gpu_arch", args.arch or "unknown",
-        "--os_version", args.os_version or "linux",
+        "--os_version", args.os_version or detect_os_version(),
         "--comfyui_url", args.comfyui_url,
         "--manifest", str(CONFIG_DIR / "suite_manifest.json"),
         "--output_dir", str(out_dir),
     ]
+    pid = os.environ.get("COMFYUI_SERVER_PID", "").strip()
+    if pid:
+        cmd += ["--comfyui_pid", pid]
     status(f"run {name}", kind="run")
     rc = subprocess.run(cmd).returncode
     return CODE_TO_STATUS.get(rc, "FAIL"), out_dir
@@ -289,6 +298,37 @@ def _inner_args(args):
     return " ".join(parts)
 
 
+def write_infra_error_result(model, results_dir, *, infra_error, comfyui_url="",
+                             rocm_version="", arch=""):
+    """Write a minimal results_<test>.json when the server never started."""
+    name = model or os.environ.get("COMFYUI_MODEL_NAME", "")
+    if not name:
+        status("no model name for --write-infra-result", kind="error")
+        return None
+    results_dir = Path(results_dir)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    meta = {
+        "arch": arch or detect_arch(),
+        "detected_arch": detect_arch(),
+        "rocm_version": rocm_version or os.environ.get("ROCM_VERSION", "unknown"),
+        "device": "",
+        **provenance(),
+    }
+    entry = {"name": name, "tags": []}
+    evi = results_dir / f"{name}_infra"
+    evi.mkdir(parents=True, exist_ok=True)
+    (evi / "summary.json").write_text(json.dumps({
+        "test_name": name,
+        "verdict": "INFRA_ERROR",
+        "failure_reason": f"INFRA_ERROR {infra_error}",
+        "duration_s": 0,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }), encoding="utf-8")
+    out = write_result_json(entry, "INFRA_ERROR", evi, results_dir, meta)
+    status(f"wrote infra result for {name}: {infra_error} -> {out}", kind="info")
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # main
 # --------------------------------------------------------------------------- #
@@ -297,7 +337,7 @@ def parse_args():
     p.add_argument("--model", default="", help="single test_name to run")
     p.add_argument("--tags", default="", help="comma-separated tags to select")
     p.add_argument("--arch", default="", help="GPU arch (else auto-detected)")
-    p.add_argument("--os-version", dest="os_version", default="linux")
+    p.add_argument("--os-version", dest="os_version", default="")
     p.add_argument("--rocm-version", dest="rocm_version", default="")
     p.add_argument("--comfyui-url", dest="comfyui_url", default="http://127.0.0.1:8188")
     p.add_argument("--results-dir", dest="results_dir", default="logs/benchmark_results")
@@ -307,6 +347,10 @@ def parse_args():
                    default=str(CONFIG_DIR / "models_config.yaml"))
     p.add_argument("--docker-image", dest="docker_image", default="")
     p.add_argument("--docker-gpu-flags", dest="docker_gpu_flags", default="")
+    p.add_argument("--write-infra-result", action="store_true",
+                   help="write minimal results_<test>.json for server start failure")
+    p.add_argument("--infra-error", dest="infra_error", default="server_start_failed",
+                   help="infra_error code for --write-infra-result")
     return p.parse_args()
 
 
@@ -318,6 +362,19 @@ def main():
     args = parse_args()
     if args.docker_image and not os.environ.get("COMFYUI_IN_CONTAINER"):
         return run_in_docker(args)
+
+    if args.write_infra_result:
+        out = write_infra_error_result(
+            args.model, args.results_dir,
+            infra_error=args.infra_error,
+            comfyui_url=args.comfyui_url,
+            rocm_version=args.rocm_version,
+            arch=args.arch,
+        )
+        return 0 if out else 1
+
+    if not args.os_version:
+        args.os_version = detect_os_version()
 
     phase("COMFYUI BENCHMARK", kind="run")
     if not args.arch:

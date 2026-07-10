@@ -27,15 +27,19 @@ Design rules enforced here:
     explicitly configures one.
 
 All logging goes to protocol_runs/bootstrap.log (setup) and
-protocol_runs/comfyui_server.log (the server's own stdout/stderr).
+protocol_runs/comfyui_server.log (the server's own stdout/stderr) unless
+$COMFYUI_SERVER_LOG overrides the server log path (CI uses logs/comfyui_server.log).
 """
 
+import argparse
+import json
 import os
 import shutil
 import subprocess
 import sys
 import time
 import urllib.request
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -44,6 +48,34 @@ LOG_DIR = REPO_ROOT / "protocol_runs"
 BOOTSTRAP_LOG = LOG_DIR / "bootstrap.log"
 SERVER_LOG = LOG_DIR / "comfyui_server.log"
 DEPS_MARKER = ".validation_deps_installed"
+
+# PID of the most recently launched ComfyUI process (main.py or port listener).
+_last_server_pid: int | None = None
+
+
+@dataclass(frozen=True)
+class LaunchResult:
+    """Outcome of start/restart_comfyui."""
+    ok: bool
+    pid: int | None = None
+
+
+def get_server_log():
+    """Server stdout/stderr log path; honour $COMFYUI_SERVER_LOG in CI."""
+    override = os.environ.get("COMFYUI_SERVER_LOG", "").strip()
+    if override:
+        return Path(override)
+    return SERVER_LOG
+
+
+def get_last_server_pid():
+    """PID recorded at the last successful _launch_process / port discovery."""
+    return _last_server_pid
+
+
+def set_last_server_pid(pid):
+    global _last_server_pid
+    _last_server_pid = int(pid) if pid else None
 
 # Minimal pinned core that ComfyUI needs to import + boot. Installing this first
 # (and fast) avoids the common "ModuleNotFoundError: No module named 'yaml'"
@@ -102,6 +134,86 @@ def comfyui_up(url, timeout=10):
                 f"{url.rstrip('/')}/system_stats", timeout=timeout) as r:
             return r.status == 200
     except Exception:
+        return False
+
+
+def wait_comfyui_up(url, *, timeout_s=120, poll_interval_s=5):
+    """Poll /system_stats until reachable or timeout. Returns True when up."""
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        if comfyui_up(url):
+            return True
+        time.sleep(max(1, poll_interval_s))
+    return False
+
+
+def load_machine_profile():
+    """Load optional configs/machine_profile.json (gitignored on runners)."""
+    prof_path = REPO_ROOT / "config" / "machine_profile.json"
+    if not prof_path.exists():
+        return {}
+    try:
+        return json.loads(prof_path.read_text(encoding="utf-8")) or {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def build_profile_from_env():
+    """Merge machine_profile.json with workflow env overrides."""
+    profile = load_machine_profile()
+    if os.environ.get("COMFYUI_PATH"):
+        profile = {**profile, "comfyui_path": os.environ["COMFYUI_PATH"]}
+    if os.environ.get("COMFYUI_PYTHON"):
+        profile = {**profile, "comfyui_venv": os.environ["COMFYUI_PYTHON"]}
+    return profile
+
+
+def find_listener_pid(port):
+    """Return PID listening on TCP `port`, or None."""
+    port = str(port)
+    try:
+        import psutil
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.laddr and str(conn.laddr.port) == port and conn.pid:
+                return int(conn.pid)
+    except Exception:
+        pass
+    try:
+        if os.name == "nt":
+            out = subprocess.check_output(
+                ["netstat", "-ano", "-p", "TCP"], text=True, timeout=15)
+            for line in out.splitlines():
+                if f":{port} " in line and "LISTENING" in line.upper():
+                    return int(line.split()[-1])
+        else:
+            out = subprocess.check_output(
+                ["bash", "-c", f"lsof -t -i:{port} -sTCP:LISTEN 2>/dev/null | head -1"],
+                text=True, timeout=15)
+            pid = out.strip().splitlines()[0] if out.strip() else ""
+            if pid.isdigit():
+                return int(pid)
+    except Exception:
+        pass
+    return None
+
+
+def pid_alive(pid):
+    """True if live, False if dead, None if pid unknown/invalid."""
+    if pid is None:
+        return None
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return None
+    try:
+        import psutil
+        return psutil.pid_exists(pid)
+    except Exception:
+        pass
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
         return False
 
 
@@ -441,29 +553,23 @@ def _launch_process(profile, comfy_path, url):
     env = dict(os.environ)
     env.update({k: str(v) for k, v in profile.get("env", {}).items()})
 
-    # Free the port before spawning. ComfyUI runs as parent+child; if a previous
-    # instance's parent exited but its child still owns the port, a fresh launch
-    # would fail with "port already in use" and never become reachable. Killing
-    # whatever holds the port first makes every relaunch reliable.
-    _kill_process_on_port(port_from_url(url))
-
-    SERVER_LOG.parent.mkdir(parents=True, exist_ok=True)
+    server_log = get_server_log()
+    server_log.parent.mkdir(parents=True, exist_ok=True)
     _log(f"starting ComfyUI: {' '.join(cmd)} (cwd={comfy_path})")
-    _log(f"server log -> {SERVER_LOG}")
+    _log(f"server log -> {server_log}")
     try:
-        # APPEND (not truncate): during a self-healing sweep ComfyUI is relaunched
-        # after a crash, and truncating here would wipe the crash traceback of the
-        # server session that just died - exactly the evidence we need. A dated
-        # separator marks each launch so sessions stay distinguishable.
-        logf = open(SERVER_LOG, "a", encoding="utf-8")
+        logf = open(server_log, "a", encoding="utf-8")
         ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         logf.write(f"\n{'=' * 70}\n== ComfyUI launch {ts} :: {' '.join(cmd)}\n"
                    f"{'=' * 70}\n")
         logf.flush()
-        return subprocess.Popen(cmd, cwd=str(comfy_path),
+        proc = subprocess.Popen(cmd, cwd=str(comfy_path),
                                 stdout=logf, stderr=logf, env=env)
+        set_last_server_pid(proc.pid)
+        return proc
     except OSError as e:
         _log(f"failed to spawn ComfyUI: {e}", stream=sys.stderr)
+        set_last_server_pid(None)
         return None
 
 
@@ -479,9 +585,9 @@ def tail_file(path, max_lines=80):
     return "\n".join(lines[-max_lines:])
 
 
-def start_comfyui(profile, url, *, allow_bootstrap=True, timeout_s=300):
-    """Locate (or bootstrap) ComfyUI and launch it, waiting until reachable.
-    Returns True once /system_stats answers, else False."""
+def start_comfyui(profile, url, *, allow_bootstrap=True, timeout_s=300,
+                  poll_interval_s=5):
+    """Locate (or bootstrap) ComfyUI, launch it, wait until /system_stats answers."""
     profile = profile or {}
     comfy_path = discover_comfyui_path(profile)
     if comfy_path is None and allow_bootstrap:
@@ -495,12 +601,10 @@ def start_comfyui(profile, url, *, allow_bootstrap=True, timeout_s=300):
         _log("set $COMFYUI_PATH or 'comfyui_path' in "
              "configs/machine_profile.json to your ComfyUI folder "
              "(the one containing main.py).", stream=sys.stderr)
-        return False
+        return LaunchResult(False, None)
 
     _log(f"using ComfyUI install at: {comfy_path}")
 
-    # Make sure deps are present even when we discovered an existing checkout
-    # that was never set up for our venv (the marker keeps this cheap on reruns).
     py = resolve_comfyui_python(profile, comfy_path)
     ok, missing = verify_comfyui_imports(py)
     if not ok:
@@ -508,30 +612,31 @@ def start_comfyui(profile, url, *, allow_bootstrap=True, timeout_s=300):
         if not install_comfyui_deps(comfy_path, py):
             _log("dependency install failed; ComfyUI will not start cleanly.",
                  stream=sys.stderr)
-            return False
+            return LaunchResult(False, None)
 
     if _launch_process(profile, comfy_path, url) is None:
-        return False
+        return LaunchResult(False, None)
 
-    deadline = time.time() + timeout_s
-    while time.time() < deadline:
-        if comfyui_up(url):
-            _log("ComfyUI is up.")
-            return True
-        time.sleep(3)
-    _log(f"ComfyUI did not become reachable within {timeout_s}s. See {SERVER_LOG}.",
-         stream=sys.stderr)
-    return False
+    if wait_comfyui_up(url, timeout_s=timeout_s, poll_interval_s=poll_interval_s):
+        port_pid = find_listener_pid(port_from_url(url))
+        if port_pid:
+            set_last_server_pid(port_pid)
+        _log(f"ComfyUI is up (pid={get_last_server_pid()}).")
+        return LaunchResult(True, get_last_server_pid())
+
+    _log(f"ComfyUI did not become reachable within {timeout_s}s. "
+         f"See {get_server_log()}.", stream=sys.stderr)
+    return LaunchResult(False, get_last_server_pid())
 
 
-def ensure_comfyui_running(profile, url, *, allow_bootstrap=True, timeout_s=300):
-    """If ComfyUI is already reachable, return True immediately; otherwise try
-    to start it (bootstrapping if allowed). The one entry point callers should
-    use before running tests."""
+def ensure_comfyui_running(profile, url, *, allow_bootstrap=True, timeout_s=300,
+                           poll_interval_s=5):
+    """Start ComfyUI if not reachable. Returns LaunchResult."""
     if comfyui_up(url):
-        return True
+        set_last_server_pid(find_listener_pid(port_from_url(url)))
+        return LaunchResult(True, get_last_server_pid())
     return start_comfyui(profile, url, allow_bootstrap=allow_bootstrap,
-                         timeout_s=timeout_s)
+                         timeout_s=timeout_s, poll_interval_s=poll_interval_s)
 
 
 def _kill_process_on_port(port):
@@ -589,36 +694,123 @@ def _kill_process_on_port(port):
     return False
 
 
-def restart_comfyui(profile, url, *, timeout_s=300):
-    """Kill any ComfyUI on the port and start a fresh one. Cross-platform.
+def stop_comfyui(*, pid=None, url=None):
+    """Terminate ComfyUI PID and kill anything listening on the ComfyUI port."""
+    if pid is not None:
+        if pid_alive(pid):
+            try:
+                import psutil
+                psutil.Process(int(pid)).terminate()
+                _log(f"terminated ComfyUI pid {pid}.")
+            except Exception:
+                try:
+                    if os.name == "nt":
+                        subprocess.run(["taskkill", "/F", "/PID", str(pid)],
+                                       capture_output=True)
+                    else:
+                        os.kill(int(pid), 15)
+                except OSError as e:
+                    _log(f"could not terminate pid {pid}: {e}", stream=sys.stderr)
+            time.sleep(2)
+    if url:
+        _kill_process_on_port(port_from_url(url))
+    set_last_server_pid(None)
+    return True
 
-    Only uses a PowerShell launcher when os.name == 'nt' AND the profile
-    explicitly sets 'comfyui_launcher' (back-compat for a pinned-memory launcher
-    script). Otherwise it always uses resolve_comfyui_python() + main.py.
-    """
+
+def restart_comfyui(profile, url, *, timeout_s=300, poll_interval_s=5):
+    """Kill :port and start a fresh ComfyUI. Never reuse-if-healthy."""
     profile = profile or {}
     port = port_from_url(url)
     _log(f"restarting ComfyUI on port {port}...")
     _kill_process_on_port(port)
+    set_last_server_pid(None)
 
     launcher = profile.get("comfyui_launcher")
     if os.name == "nt" and launcher and Path(_expand(launcher)).exists():
         _log(f"using configured Windows launcher: {launcher}")
+        server_log = get_server_log()
+        server_log.parent.mkdir(parents=True, exist_ok=True)
         try:
-            subprocess.Popen(
+            logf = open(server_log, "a", encoding="utf-8")
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            logf.write(f"\n{'=' * 70}\n== ComfyUI launcher {ts} :: {launcher}\n"
+                       f"{'=' * 70}\n")
+            logf.flush()
+            proc = subprocess.Popen(
                 ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
                  "-File", str(_expand(launcher))],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                stdout=logf, stderr=logf)
+            set_last_server_pid(proc.pid)
         except OSError as e:
             _log(f"launcher failed: {e}", stream=sys.stderr)
-            return False
-        deadline = time.time() + timeout_s
-        while time.time() < deadline:
-            if comfyui_up(url):
-                _log("ComfyUI is up (launcher).")
-                time.sleep(3)
-                return True
-            time.sleep(3)
-        return False
+            return LaunchResult(False, None)
+        if wait_comfyui_up(url, timeout_s=timeout_s, poll_interval_s=poll_interval_s):
+            port_pid = find_listener_pid(port)
+            if port_pid:
+                set_last_server_pid(port_pid)
+            _log(f"ComfyUI is up via launcher (pid={get_last_server_pid()}).")
+            return LaunchResult(True, get_last_server_pid())
+        return LaunchResult(False, get_last_server_pid())
 
-    return start_comfyui(profile, url, allow_bootstrap=False, timeout_s=timeout_s)
+    return start_comfyui(profile, url, allow_bootstrap=False, timeout_s=timeout_s,
+                         poll_interval_s=poll_interval_s)
+
+
+def write_gha_output(key, value):
+    gha_output = os.environ.get("GITHUB_OUTPUT")
+    if gha_output:
+        with open(gha_output, "a", encoding="utf-8") as f:
+            f.write(f"{key}={value}\n")
+
+
+def _cli_restart(args):
+    profile = build_profile_from_env()
+    if args.server_log:
+        os.environ["COMFYUI_SERVER_LOG"] = args.server_log
+    result = restart_comfyui(
+        profile, args.url,
+        timeout_s=args.health_timeout,
+        poll_interval_s=args.poll_interval,
+    )
+    if result.ok and result.pid:
+        write_gha_output("comfyui_pid", str(result.pid))
+        print(f"COMFYUI_SERVER_PID={result.pid}")
+    if not result.ok:
+        print("[INFRA_ERROR] server_start_failed", file=sys.stderr)
+        write_gha_output("result", "INFRA_ERROR")
+        write_gha_output("infra_error", "server_start_failed")
+        return 3
+    return 0
+
+
+def _cli_stop(args):
+    pid = args.pid or os.environ.get("COMFYUI_SERVER_PID")
+    stop_comfyui(pid=pid, url=args.url)
+    return 0
+
+
+def _cli_main():
+    p = argparse.ArgumentParser(description="ComfyUI server lifecycle (CI + local)")
+    p.add_argument("--url", default=os.environ.get("COMFYUI_URL", "http://127.0.0.1:8188"))
+    p.add_argument("--server-log", default=os.environ.get("COMFYUI_SERVER_LOG", ""))
+    p.add_argument("--health-timeout", type=int, default=int(
+        os.environ.get("COMFYUI_HEALTH_TIMEOUT_S", "120")))
+    p.add_argument("--poll-interval", type=int, default=int(
+        os.environ.get("COMFYUI_HEALTH_POLL_S", "5")))
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("restart", help="kill :port and start fresh ComfyUI")
+    stop_p = sub.add_parser("stop", help="stop ComfyUI pid and/or port listener")
+    stop_p.add_argument("--pid", default=None)
+
+    args = p.parse_args()
+    if args.command == "restart":
+        return _cli_restart(args)
+    if args.command == "stop":
+        return _cli_stop(args)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(_cli_main())
