@@ -4,25 +4,43 @@ description: 'Git Bash on Windows self-hosted runners; resolve a usable Python f
 runs:
   using: 'composite'
   steps:
-    - name: Prepare PATH and Python
+    - name: Prepare PATH and Python (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $gitBin = 'C:\Program Files\Git\bin'
+        $gitUsr = 'C:\Program Files\Git\usr\bin'
+        $add = @()
+        if (Test-Path $gitBin) { $add += $gitBin }
+        if (Test-Path $gitUsr) { $add += $gitUsr }
+        if ($add.Count -gt 0) {
+          $newPath = ($add -join ';') + ';' + $env:PATH
+          "PATH=$newPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+        }
+
+        $py = $env:COMFYUI_PYTHON
+        if (-not $py -or -not (Test-Path $py)) {
+          $py = (Get-Command python -ErrorAction SilentlyContinue).Source
+        }
+        if ($py) {
+          "CI_PYTHON=$py" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Using CI Python: $py"
+          & $py --version
+        } else {
+          Write-Host "::warning::No python on PATH after CI shell prep"
+        }
+
+    - name: Prepare PATH and Python (Unix)
+      if: runner.os != 'Windows'
       shell: bash
       run: |
         set -euo pipefail
-
-        if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
-          for d in "/c/Program Files/Git/bin" "/c/Program Files/Git/usr/bin"; do
-            if [[ -d "$d" ]]; then
-              export PATH="$d:$PATH"
-            fi
-          done
-          echo "PATH=$PATH" >> "$GITHUB_ENV"
-        fi
 
         PY=""
         if [[ -n "${COMFYUI_PYTHON:-}" ]] && { [[ -x "${COMFYUI_PYTHON}" ]] || [[ -f "${COMFYUI_PYTHON}" ]]; }; then
           PY="${COMFYUI_PYTHON}"
         else
-          PY="$(command -v python 2>/dev/null || command -v python3 2>/dev/null || true)"
+          PY="$(command -v python3 2>/dev/null || command -v python 2>/dev/null || true)"
         fi
 
         if [[ -z "$PY" ]]; then
