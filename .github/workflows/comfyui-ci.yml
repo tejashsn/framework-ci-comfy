@@ -520,6 +520,12 @@ jobs:
     if: always()
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare CI shell
+        uses: ./.github/actions/prepare-ci-shell
+
       - name: Final
         run: |
           echo "## ComfyUI Validation Complete" >> $GITHUB_STEP_SUMMARY
