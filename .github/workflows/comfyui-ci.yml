@@ -172,6 +172,7 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         model: ${{ fromJson(needs.setup.outputs.models) }}
         runner_label: ${{ fromJson(needs.setup.outputs.runner_labels) }}
@@ -306,6 +307,42 @@ jobs:
           "$PY" tests/src/inference/comfyui/scripts/create_config.py \
             --detect-gpu-arch \
             --output-file "$GITHUB_OUTPUT"
+
+      - name: Resolve ComfyUI host paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESOLVED_PATH="${COMFYUI_PATH:-}"
+          if [ -z "$RESOLVED_PATH" ]; then
+            if [ -d /home/master/ComfyUI ]; then
+              RESOLVED_PATH=/home/master/ComfyUI
+            elif [ -d /c/TheRock/ComfyUI ]; then
+              RESOLVED_PATH=/c/TheRock/ComfyUI
+            fi
+            if [ -n "$RESOLVED_PATH" ]; then
+              echo "COMFYUI_PATH=$RESOLVED_PATH" >> "$GITHUB_ENV"
+            fi
+          fi
+          PY="${COMFYUI_PYTHON:-}"
+          if [ -z "$PY" ] || [ "$PY" = "python3" ]; then
+            if [ -x /home/master/comfyui-host-venv/bin/python ]; then
+              PY=/home/master/comfyui-host-venv/bin/python
+            elif [ -x /c/TheRock/.venv314/Scripts/python.exe ]; then
+              PY=/c/TheRock/.venv314/Scripts/python.exe
+            fi
+          fi
+          if [ -z "$PY" ]; then
+            PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          fi
+          if [ -n "$PY" ]; then
+            echo "COMFYUI_PYTHON=$PY" >> "$GITHUB_ENV"
+          fi
+          if [ -z "${RESOLVED_PATH:-}" ]; then
+            echo "::error::COMFYUI_PATH not set and no known ComfyUI install found on runner"
+            exit 1
+          fi
+          echo "Resolved COMFYUI_PATH=$RESOLVED_PATH"
+          echo "Resolved COMFYUI_PYTHON=$PY"
 
       - name: Manage ComfyUI (start)
         uses: ./.github/actions/manage-comfyui-server

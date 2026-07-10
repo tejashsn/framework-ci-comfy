@@ -42,6 +42,7 @@ runs:
 
         PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
         echo "Using Python: $($PY --version 2>&1)"
+        echo "ComfyUI path: ${COMFYUI_PATH:-'(unset)'}"
         echo "ComfyUI server log: $COMFYUI_SERVER_LOG"
 
         set +e

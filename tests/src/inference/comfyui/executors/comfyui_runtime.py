@@ -260,6 +260,7 @@ def discover_comfyui_path(profile):
         REPO_ROOT / "ComfyUI",
         Path("C:/ComfyUI"),
         Path("C:/ComfyUI_windows_portable/ComfyUI"),
+        Path("C:/TheRock/ComfyUI"),
         Path("/opt/ComfyUI"),
     ]
     for c in candidates:
