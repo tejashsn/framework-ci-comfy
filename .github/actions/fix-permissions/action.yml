@@ -29,7 +29,40 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Fix ownership and permissions
+    - name: Fix ownership and permissions (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        Write-Host "Fixing permissions (Windows)..."
+
+        $paths = "${{ inputs.paths }}"
+        if (-not $paths) { $paths = $env:GITHUB_WORKSPACE }
+
+        foreach ($path in $paths.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
+          if (Test-Path $path) {
+            Write-Host "  Checking: $path"
+          } else {
+            Write-Host "  Path does not exist: $path"
+          }
+        }
+
+        $cleanPaths = "${{ inputs.clean_paths }}"
+        if ($cleanPaths) {
+          Write-Host ""
+          Write-Host "Cleaning paths..."
+          foreach ($path in $cleanPaths.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
+            if (Test-Path $path) {
+              Write-Host "  Removing: $path"
+              Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+        }
+
+        Write-Host ""
+        Write-Host "Permissions fix complete"
+
+    - name: Fix ownership and permissions (Unix)
+      if: runner.os != 'Windows'
       shell: bash
       run: |
         set +e  # Don't exit on errors - we want to try all methods

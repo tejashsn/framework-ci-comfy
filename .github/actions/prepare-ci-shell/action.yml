@@ -14,8 +14,10 @@ runs:
         if (Test-Path $gitBin) { $add += $gitBin }
         if (Test-Path $gitUsr) { $add += $gitUsr }
         if ($add.Count -gt 0) {
-          $newPath = ($add -join ';') + ';' + $env:PATH
-          "PATH=$newPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # GITHUB_PATH prepends for subsequent steps (including composite shell: bash lookup).
+          foreach ($dir in $add) {
+            $dir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
         }
 
         $py = $env:COMFYUI_PYTHON
