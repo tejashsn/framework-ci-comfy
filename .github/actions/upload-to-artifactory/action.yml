@@ -84,8 +84,10 @@ runs:
           TN_ARG="--test-name ${{ inputs.test_name }}"
         fi
 
+        PY="${CI_PYTHON:-${COMFYUI_PYTHON:-$(command -v python || command -v python3)}}"
+
         set +e
-        python3 scripts/upload_to_artifactory.py \
+        "$PY" scripts/upload_to_artifactory.py \
           --source-path "${{ inputs.source_path }}" \
           --logs-dir "${{ inputs.logs_dir }}" \
           --user "${{ inputs.artifactory_user }}" \

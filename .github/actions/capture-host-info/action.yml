@@ -21,23 +21,25 @@ runs:
     - name: Capture host config
       shell: bash
       run: |
+        PY="${CI_PYTHON:-${COMFYUI_PYTHON:-$(command -v python || command -v python3)}}"
+
         mkdir -p $(dirname ${{ inputs.output_path }})
         
         echo ""
         echo "============================================================"
         echo "[CMD] Capture Host Info"
         echo "[CMD] Output: ${{ inputs.output_path }}"
-        echo "[CMD] Command: python3 scripts/capture_system_info.py --output ${{ inputs.output_path }} --no-packages"
+        echo "[CMD] Command: $PY scripts/capture_system_info.py --output ${{ inputs.output_path }} --no-packages"
         echo "============================================================"
         echo ""
         
-        python3 scripts/capture_system_info.py \
+        "$PY" scripts/capture_system_info.py \
           --output ${{ inputs.output_path }} \
           --no-packages
         
         if [ -f "${{ inputs.output_path }}" ]; then
           echo "✅ Host config saved to: ${{ inputs.output_path }}"
-          python3 << PYTHON_SCRIPT 2>/dev/null || true
+          "$PY" << PYTHON_SCRIPT 2>/dev/null || true
         import json
         with open('${{ inputs.output_path }}') as f:
             d = json.load(f)
@@ -54,8 +56,9 @@ runs:
     - name: Capture BKC version
       shell: bash
       run: |
+        PY="${CI_PYTHON:-${COMFYUI_PYTHON:-$(command -v python || command -v python3)}}"
         echo "Detecting BKC firmware version..."
-        python3 scripts/get_bkc.py --github-env --save-to logs/bkc.txt 2>/dev/null || true
+        "$PY" scripts/get_bkc.py --github-env --save-to logs/bkc.txt 2>/dev/null || true
         if [ -f logs/bkc.txt ] && [ -s logs/bkc.txt ]; then
           BKC=$(cat logs/bkc.txt)
           echo "BKC_VERSION=$BKC" >> $GITHUB_ENV
