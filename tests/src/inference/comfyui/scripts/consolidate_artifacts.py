@@ -15,6 +15,10 @@ import sys
 from pathlib import Path
 
 FAIL_STATUSES = {"FAIL", "INFRA_ERROR"}
+SKIP_STATUSES = {"SKIP"}
+ALL_SKIP_BANNER = (
+    "## ALL RESULTS SKIPPED — check runner capability / gating config"
+)
 
 
 def _collect_rows(results_root: Path) -> list[dict]:
@@ -46,15 +50,19 @@ def _collect_rows(results_root: Path) -> list[dict]:
     return rows
 
 
-def _write_summary(rows: list[dict], out_path: Path) -> str:
+def _write_summary(rows: list[dict], out_path: Path, *, all_skip: bool = False) -> str:
     lines = [
         "# ComfyUI Validation — consolidated results",
         "",
+    ]
+    if all_skip:
+        lines.extend([ALL_SKIP_BANNER, ""])
+    lines.extend([
         f"**Total rows:** {len(rows)}",
         "",
         "| Artifact | Test | Status | Arch | Minutes | Metric | Reason |",
         "|----------|------|--------|------|---------|--------|--------|",
-    ]
+    ])
     for r in rows:
         lines.append(
             f"| {r['artifact']} | {r['test_name']} | {r['status']} | {r['arch']} | "
@@ -79,8 +87,13 @@ def main() -> int:
         return 0
 
     rows = _collect_rows(root)
-    _write_summary(rows, Path(args.output))
+    all_skip = bool(rows) and all(
+        str(r["status"]).upper() in SKIP_STATUSES for r in rows
+    )
+    _write_summary(rows, Path(args.output), all_skip=all_skip)
     print(f"Wrote {args.output} ({len(rows)} row(s))")
+    if all_skip:
+        print(f"WARNING: {ALL_SKIP_BANNER}")
 
     hard_fails = [r for r in rows if str(r["status"]).upper() in FAIL_STATUSES]
     if hard_fails:

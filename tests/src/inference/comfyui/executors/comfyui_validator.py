@@ -199,6 +199,62 @@ def check_output_writable(comfy_path):
         return False, f"{out_dir} not writable: {e.__class__.__name__}: {e}"
 
 
+
+def detect_vram_mb(python=None):
+    """Return (total_mb, free_mb) via torch.cuda.mem_get_info, or (0, 0) on failure."""
+    python = python or sys.executable
+    try:
+        result = subprocess.run(
+            [python, "-c",
+             "import torch; "
+             "free, total = torch.cuda.mem_get_info(0); "
+             "print(free // 1024**2, total // 1024**2)"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            parts = result.stdout.strip().split()
+            if len(parts) >= 2:
+                return int(parts[1]), int(parts[0])
+    except Exception:
+        pass
+    return 0, 0
+
+
+def check_capability_gate(test, gpu_arch_detected):
+    """Return (should_skip, skip_reason, details) or (False, None, {})."""
+    details = {}
+    arch = (gpu_arch_detected or "").lower()
+    allow = test.get("gpu_arch_allow") or []
+    deny = test.get("gpu_arch_deny") or []
+    if allow and arch and arch not in [a.lower() for a in allow]:
+        return True, "gpu_arch_unsupported", {
+            "required_arch": ",".join(allow), "detected_arch": arch,
+        }
+    if deny and arch in [d.lower() for d in deny]:
+        return True, "gpu_arch_unsupported", {
+            "denied_arch": arch, "detected_arch": arch,
+        }
+
+    required = test.get("min_vram_mb")
+    if required:
+        total_mb, free_mb = detect_vram_mb()
+        detected = total_mb or free_mb
+        if detected and detected < int(required):
+            return True, "insufficient_vram", {
+                "required_mb": int(required),
+                "detected_mb": detected,
+                "detected_gb": round(detected / 1024, 2),
+                "required_gb": round(int(required) / 1024, 2),
+            }
+    return False, None, {}
+
+
+def format_skip_failure_reason(skip_reason, details):
+    parts = [f"SKIP {skip_reason}"]
+    for k, val in details.items():
+        parts.append(f"{k}={val}")
+    return ": ".join(parts)
+
 def capture_server_tail(evidence_dir, max_lines=80, always_write=False):
     """Copy the tail of the shared ComfyUI server log into this test's evidence
     dir as comfyui_server_tail.log, so a failure carries the server-side output
@@ -281,7 +337,31 @@ def main():
             print(f"[DRY_RUN] Workflow found: {workflow_path}")
         print(f"[DRY_RUN] OK - {args.execute} ({args.gpu_arch} / {args.os_version})")
         write_gha_output("result", "DRY_RUN_OK")
-        sys.exit(0)
+    detected_arch = detect_gpu_arch()
+    should_skip, skip_reason, skip_details = check_capability_gate(test, detected_arch)
+    if should_skip:
+        failure_reason = format_skip_failure_reason(skip_reason, skip_details)
+        evidence_dir = Path(args.output_dir) / f"{args.execute}_{ts}"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[SKIP] {args.execute} - {failure_reason}")
+        (evidence_dir / "summary.json").write_text(json.dumps({
+            "test_name": args.execute,
+            "tms_key": test.get("tms_key"),
+            "execution_label": args.execution_label,
+            "rocm_version": args.rocm_version,
+            "gpu_arch": args.gpu_arch,
+            "detected_gpu_arch": detected_arch,
+            "os_version": args.os_version,
+            "verdict": "SKIP",
+            "skip_reason": skip_reason,
+            "failure_reason": failure_reason,
+            "duration_s": 0,
+            "timestamp": ts,
+            "evidence_dir": str(evidence_dir),
+        }, indent=2), encoding="utf-8")
+        write_gha_output("result", "SKIP")
+        write_gha_output("skip_reason", skip_reason)
+        sys.exit(2)
 
     # Check ComfyUI reachable
     if not check_comfyui(args.comfyui_url):
