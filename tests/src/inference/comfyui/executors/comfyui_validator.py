@@ -44,6 +44,8 @@ def parse_args():
     p.add_argument("--max_timed_runs",   type=int, default=0,
                    help="Cap timed runs (0 = use manifest perf_targets value). "
                         "Useful on slow hardware to avoid multi-pass timeouts.")
+    p.add_argument("--comfyui_pid",      default=None,
+                   help="ComfyUI server PID from CI lifecycle (for crash detection)")
     return p.parse_args()
 
 
@@ -199,6 +201,63 @@ def check_output_writable(comfy_path):
         return False, f"{out_dir} not writable: {e.__class__.__name__}: {e}"
 
 
+
+
+def detect_vram_mb(python=None):
+    """Return (total_mb, free_mb) via torch.cuda.mem_get_info, or (0, 0) on failure."""
+    python = python or sys.executable
+    try:
+        result = subprocess.run(
+            [python, "-c",
+             "import torch; "
+             "free, total = torch.cuda.mem_get_info(0); "
+             "print(free // 1024**2, total // 1024**2)"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0:
+            parts = result.stdout.strip().split()
+            if len(parts) >= 2:
+                return int(parts[1]), int(parts[0])
+    except Exception:
+        pass
+    return 0, 0
+
+
+def check_capability_gate(test, gpu_arch_detected):
+    """Return (should_skip, skip_reason, details) or (False, None, {})."""
+    details = {}
+    arch = (gpu_arch_detected or "").lower()
+    allow = test.get("gpu_arch_allow") or []
+    deny = test.get("gpu_arch_deny") or []
+    if allow and arch and arch not in [a.lower() for a in allow]:
+        return True, "gpu_arch_unsupported", {
+            "required_arch": ",".join(allow), "detected_arch": arch,
+        }
+    if deny and arch in [d.lower() for d in deny]:
+        return True, "gpu_arch_unsupported", {
+            "denied_arch": arch, "detected_arch": arch,
+        }
+
+    required = test.get("min_vram_mb")
+    if required:
+        total_mb, free_mb = detect_vram_mb()
+        detected = total_mb or free_mb
+        if detected and detected < int(required):
+            return True, "insufficient_vram", {
+                "required_mb": int(required),
+                "detected_mb": detected,
+                "detected_gb": round(detected / 1024, 2),
+                "required_gb": round(int(required) / 1024, 2),
+            }
+    return False, None, {}
+
+
+def format_skip_failure_reason(skip_reason, details):
+    parts = [f"SKIP {skip_reason}"]
+    for k, val in details.items():
+        parts.append(f"{k}={val}")
+    return ": ".join(parts)
+
 def capture_server_tail(evidence_dir, max_lines=80, always_write=False):
     """Copy the tail of the shared ComfyUI server log into this test's evidence
     dir as comfyui_server_tail.log, so a failure carries the server-side output
@@ -212,7 +271,7 @@ def capture_server_tail(evidence_dir, max_lines=80, always_write=False):
     framework and no shared server log exists."""
     try:
         import comfyui_runtime
-        server_log = comfyui_runtime.SERVER_LOG
+        server_log = comfyui_runtime.get_server_log()
         tail = comfyui_runtime.tail_file(server_log, max_lines)
     except Exception:
         server_log, tail = None, ""
@@ -282,6 +341,32 @@ def main():
         print(f"[DRY_RUN] OK - {args.execute} ({args.gpu_arch} / {args.os_version})")
         write_gha_output("result", "DRY_RUN_OK")
         sys.exit(0)
+
+    detected_arch = detect_gpu_arch()
+    should_skip, skip_reason, skip_details = check_capability_gate(test, detected_arch)
+    if should_skip:
+        failure_reason = format_skip_failure_reason(skip_reason, skip_details)
+        evidence_dir = Path(args.output_dir) / f"{args.execute}_{ts}"
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[SKIP] {args.execute} - {failure_reason}")
+        (evidence_dir / "summary.json").write_text(json.dumps({
+            "test_name": args.execute,
+            "tms_key": test.get("tms_key"),
+            "execution_label": args.execution_label,
+            "rocm_version": args.rocm_version,
+            "gpu_arch": args.gpu_arch,
+            "detected_gpu_arch": detected_arch,
+            "os_version": args.os_version,
+            "verdict": "SKIP",
+            "skip_reason": skip_reason,
+            "failure_reason": failure_reason,
+            "duration_s": 0,
+            "timestamp": ts,
+            "evidence_dir": str(evidence_dir),
+        }, indent=2), encoding="utf-8")
+        write_gha_output("result", "SKIP")
+        write_gha_output("skip_reason", skip_reason)
+        sys.exit(2)
 
     # Check ComfyUI reachable
     if not check_comfyui(args.comfyui_url):
@@ -398,30 +483,38 @@ def main():
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_min * 60 + 30)
     except subprocess.TimeoutExpired:
+        import comfyui_runtime
         dur = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
-        reason = (f"timeout after {timeout_min} min "
-                  f"(hardware too slow for configured passes)")
-        print(f"[FAIL] {args.execute} timed out after {timeout_min} min "
-              f"-- reason: {reason}", file=sys.stderr)
-        # A timeout is a prime crash/hang case - snapshot the server log so the
-        # GPU/HIP hang traceback is preserved beside this test (always write, so
-        # the evidence file exists for this non-PASS path too).
-        tail = capture_server_tail(evidence_dir, always_write=True)
+        pid = args.comfyui_pid or os.environ.get("COMFYUI_SERVER_PID")
+        alive = comfyui_runtime.pid_alive(pid) if pid else None
+        tail = capture_server_tail(evidence_dir, max_lines=100, always_write=True)
         last = [ln for ln in tail.splitlines() if ln.strip()]
+        if alive is False:
+            verdict = "INFRA_ERROR"
+            reason = f"server_died_mid_test after {timeout_min} min"
+            fail_key, fail_val = "infra_error", "server_died_mid_test"
+            exit_code = 3
+        else:
+            verdict = "FAIL"
+            reason = f"timeout after {timeout_min} min (inference too slow)"
+            fail_key, fail_val = "fail_reason", "timeout"
+            exit_code = 1
         if last:
             reason += f" | comfyui_server last line: {last[-1][:200]}"
+        print(f"[{verdict}] {args.execute} timed out after {timeout_min} min "
+              f"-- reason: {reason}", file=sys.stderr)
         (evidence_dir / "summary.json").write_text(json.dumps({
             "test_name": args.execute, "tms_key": test["tms_key"],
             "execution_label": args.execution_label, "rocm_version": args.rocm_version,
             "gpu_arch": args.gpu_arch, "detected_gpu_arch": detect_gpu_arch(),
             "os_version": args.os_version,
-            "verdict": "FAIL", "failure_reason": reason, "io_error": False,
+            "verdict": verdict, "failure_reason": reason, "io_error": False,
             "server_log_tail": "comfyui_server_tail.log", "duration_s": dur,
             "timestamp": ts, "evidence_dir": str(evidence_dir),
         }, indent=2))
-        write_gha_output("result", "FAIL")
-        write_gha_output("fail_reason", "timeout")
-        sys.exit(1)
+        write_gha_output("result", verdict)
+        write_gha_output(fail_key, fail_val)
+        sys.exit(exit_code)
 
     duration_s = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
 

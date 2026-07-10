@@ -321,3 +321,85 @@ def test_prune_skips_video(tmp_path):
     )
     assert ok == 1 and fail == 0
     assert "comfyui_sd21" in upload_base
+
+# --------------------------------------------------------------------------- #
+# consolidate (SKIP / all-SKIP / FAIL)
+# --------------------------------------------------------------------------- #
+def _write_consolidate_fixture(tmp_path, statuses):
+    root = tmp_path / "all_results" / "job1" / "logs" / "benchmark_results"
+    root.mkdir(parents=True)
+    for i, st in enumerate(statuses):
+        name = f"comfyui_test_{i}"
+        (root / f"results_{name}.json").write_text(
+            '{"results": [{"test_config": {"test_name": "%s"}, '
+            '"result_status": "%s", "test_result": "%s", "test_metrics": []}]}' % (
+                name, st, "PASS" if st == "PASS" else "FAIL",
+            ),
+            encoding="utf-8",
+        )
+    return tmp_path / "all_results"
+
+
+def test_consolidate_skip_non_fatal(tmp_path):
+    import consolidate_artifacts
+    results = _write_consolidate_fixture(tmp_path, ["PASS", "SKIP"])
+    out = tmp_path / "results_summary.md"
+    import sys
+    argv = [
+        "consolidate_artifacts.py",
+        "--results-dir", str(results),
+        "--output", str(out),
+        "--fail-on-error",
+    ]
+    old = sys.argv
+    try:
+        sys.argv = argv
+        assert consolidate_artifacts.main() == 0
+    finally:
+        sys.argv = old
+    assert out.exists()
+
+
+def test_consolidate_all_skip_warns(tmp_path, capsys):
+    import consolidate_artifacts
+    results = _write_consolidate_fixture(tmp_path, ["SKIP", "SKIP"])
+    out = tmp_path / "results_summary.md"
+    import sys
+    argv = [
+        "consolidate_artifacts.py",
+        "--results-dir", str(results),
+        "--output", str(out),
+        "--fail-on-error",
+    ]
+    old = sys.argv
+    try:
+        sys.argv = argv
+        rc = consolidate_artifacts.main()
+    finally:
+        sys.argv = old
+    assert rc == 0
+    body = out.read_text(encoding="utf-8")
+    assert "ALL RESULTS SKIPPED" in body
+    captured = capsys.readouterr()
+    assert "ALL RESULTS SKIPPED" in captured.out
+
+
+def test_consolidate_fail_on_infra(tmp_path):
+    import consolidate_artifacts
+    results = _write_consolidate_fixture(tmp_path, ["INFRA_ERROR"])
+    out = tmp_path / "results_summary.md"
+    import sys
+    argv = [
+        "consolidate_artifacts.py",
+        "--results-dir", str(results),
+        "--output", str(out),
+        "--fail-on-error",
+    ]
+    old = sys.argv
+    try:
+        sys.argv = argv
+        rc = consolidate_artifacts.main()
+    finally:
+        sys.argv = old
+    assert rc == 1
+

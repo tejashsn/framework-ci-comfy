@@ -1,8 +1,8 @@
 # ComfyUI Validation Workflow
 # Runs ComfyUI GPU validation on AMD GPUs via self-hosted runners (bare metal).
 #
-# No Docker required: ComfyUI must already be running on the runner host
-# (default http://127.0.0.1:8188). Model weights live under COMFYUI_PATH/models/.
+# No Docker required. Each benchmark job restarts ComfyUI (kill :8188 + fresh
+# start) via manage-comfyui-server. Model weights live under COMFYUI_PATH/models/.
 #
 # Triggers:
 #   - Manual (workflow_dispatch)
@@ -172,6 +172,7 @@ jobs:
 
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         model: ${{ fromJson(needs.setup.outputs.models) }}
         runner_label: ${{ fromJson(needs.setup.outputs.runner_labels) }}
@@ -191,6 +192,7 @@ jobs:
       COMFYUI_MODEL_NAME: ${{ matrix.model }}
       COMFYUI_PATH: ${{ inputs.comfyui_path || vars.COMFYUI_PATH || '' }}
       COMFYUI_PYTHON: ${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}
+      COMFYUI_SERVER_LOG: logs/comfyui_server.log
       UPLOAD_TO_ARTIFACTORY: ${{ inputs.upload_to_artifactory || false }}
 
     steps:
@@ -306,7 +308,53 @@ jobs:
             --detect-gpu-arch \
             --output-file "$GITHUB_OUTPUT"
 
+      - name: Resolve ComfyUI host paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESOLVED_PATH="${COMFYUI_PATH:-}"
+          if [ -z "$RESOLVED_PATH" ]; then
+            if [ -d /home/master/ComfyUI ]; then
+              RESOLVED_PATH=/home/master/ComfyUI
+            elif [ -d /c/TheRock/ComfyUI ]; then
+              RESOLVED_PATH=/c/TheRock/ComfyUI
+            fi
+            if [ -n "$RESOLVED_PATH" ]; then
+              echo "COMFYUI_PATH=$RESOLVED_PATH" >> "$GITHUB_ENV"
+            fi
+          fi
+          PY="${COMFYUI_PYTHON:-}"
+          if [ -z "$PY" ] || [ "$PY" = "python3" ]; then
+            if [ -x /home/master/comfyui-host-venv/bin/python ]; then
+              PY=/home/master/comfyui-host-venv/bin/python
+            elif [ -x /c/TheRock/.venv314/Scripts/python.exe ]; then
+              PY=/c/TheRock/.venv314/Scripts/python.exe
+            fi
+          fi
+          if [ -z "$PY" ]; then
+            PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          fi
+          if [ -n "$PY" ]; then
+            echo "COMFYUI_PYTHON=$PY" >> "$GITHUB_ENV"
+          fi
+          if [ -z "${RESOLVED_PATH:-}" ]; then
+            echo "::error::COMFYUI_PATH not set and no known ComfyUI install found on runner"
+            exit 1
+          fi
+          echo "Resolved COMFYUI_PATH=$RESOLVED_PATH"
+          echo "Resolved COMFYUI_PYTHON=$PY"
+
+      - name: Manage ComfyUI (start)
+        uses: ./.github/actions/manage-comfyui-server
+        with:
+          mode: restart
+          comfyui_url: ${{ inputs.comfyui_url }}
+          server_log: logs/comfyui_server.log
+          health_timeout_s: '120'
+          health_poll_s: '5'
+
       - name: Run ComfyUI validation
+        if: success()
         run: |
           set -euo pipefail
           mkdir -p logs/benchmark_results
@@ -368,6 +416,13 @@ jobs:
 
           echo "BENCHMARK_EXIT_CODE=$BENCHMARK_EXIT" >> "$GITHUB_ENV"
           exit $BENCHMARK_EXIT
+
+      - name: Manage ComfyUI (stop)
+        if: always()
+        uses: ./.github/actions/manage-comfyui-server
+        with:
+          mode: stop
+          comfyui_url: ${{ inputs.comfyui_url }}
 
       - name: Generate model summary
         if: always()
