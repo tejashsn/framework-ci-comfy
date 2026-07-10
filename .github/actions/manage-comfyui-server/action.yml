@@ -45,11 +45,12 @@ runs:
         echo "ComfyUI server log: $COMFYUI_SERVER_LOG"
 
         set +e
-        "$PY" tests/src/inference/comfyui/executors/comfyui_runtime.py restart \
+        "$PY" tests/src/inference/comfyui/executors/comfyui_runtime.py \
           --url "$COMFYUI_URL" \
           --server-log "$COMFYUI_SERVER_LOG" \
           --health-timeout "$COMFYUI_HEALTH_TIMEOUT_S" \
-          --poll-interval "$COMFYUI_HEALTH_POLL_S"
+          --poll-interval "$COMFYUI_HEALTH_POLL_S" \
+          restart
         RC=$?
         set -e
 
@@ -93,8 +94,8 @@ runs:
         if [ -z "$PID" ]; then
           PID="${COMFYUI_SERVER_PID:-}"
         fi
-        ARGS=(stop --url "$COMFYUI_URL")
+        STOP_ARGS=(--url "$COMFYUI_URL" stop)
         if [ -n "$PID" ]; then
-          ARGS+=(--pid "$PID")
+          STOP_ARGS+=(--pid "$PID")
         fi
-        "$PY" tests/src/inference/comfyui/executors/comfyui_runtime.py "${ARGS[@]}" || true
+        "$PY" tests/src/inference/comfyui/executors/comfyui_runtime.py "${STOP_ARGS[@]}" || true
