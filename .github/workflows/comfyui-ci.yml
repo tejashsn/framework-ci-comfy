@@ -115,14 +115,14 @@ jobs:
       upload_results: ${{ steps.parse.outputs.upload_results }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Prepare CI shell
         uses: ./.github/actions/prepare-ci-shell
 
       - name: Fix permissions
         uses: ./.github/actions/fix-permissions
-
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Parse inputs
         id: parse
@@ -194,6 +194,9 @@ jobs:
       UPLOAD_TO_ARTIFACTORY: ${{ inputs.upload_to_artifactory || false }}
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Prepare CI shell
         uses: ./.github/actions/prepare-ci-shell
 
@@ -202,9 +205,6 @@ jobs:
         with:
           paths: '${{ github.workspace }}'
           clean_paths: 'logs results'
-
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Setup test environment
         uses: ./.github/actions/setup-test-environment
@@ -433,11 +433,11 @@ jobs:
       EXECUTION_LABEL: ${{ inputs.execution_label || github.event_name }}
 
     steps:
-      - name: Prepare CI shell
-        uses: ./.github/actions/prepare-ci-shell
-
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare CI shell
+        uses: ./.github/actions/prepare-ci-shell
 
       - name: Install deps
         run: |
