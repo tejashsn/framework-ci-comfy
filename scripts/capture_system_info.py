@@ -86,17 +86,17 @@ def capture_pip_list(output_dir: str) -> str:
             f.write("\n".join(content))
         
         pkg_count = len([l for l in pip_freeze.stdout.strip().split("\n") if l and "==" in l])
-        print(f"  ✓ Pip freeze saved: {log_file} ({pkg_count} packages)")
+        print(f"  OK Pip freeze saved: {log_file} ({pkg_count} packages)")
         
         return str(log_file)
         
     except subprocess.TimeoutExpired:
-        print("  ⚠ Pip freeze timed out")
+        print("  WARN Pip freeze timed out")
         with open(log_file, "w") as f:
             f.write("ERROR: pip freeze command timed out after 60 seconds")
         return str(log_file)
     except Exception as e:
-        print(f"  ⚠ Pip list failed: {e}")
+        print(f"  WARN Pip list failed: {e}")
         with open(log_file, "w") as f:
             f.write(f"ERROR: {e}")
         return str(log_file)
@@ -162,7 +162,7 @@ def capture_system_info(output_file: str, include_packages: bool = False, captur
         json.dump(result, f, indent=2, default=str)
     
     print("")
-    print(f"✓ Saved to: {output_path}")
+    print(f"Saved to: {output_path}")
     print("=" * 60)
     
     return result
