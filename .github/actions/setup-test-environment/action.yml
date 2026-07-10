@@ -17,7 +17,10 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    # Self-hosted Windows runners use COMFYUI_PYTHON / CI_PYTHON from prepare-ci-shell.
+    # setup-python tries to install Python and often fails on registry permissions.
     - name: Set up Python
+      if: runner.os != 'Windows'
       id: setup-python
       uses: actions/setup-python@v5
       continue-on-error: true
@@ -28,25 +31,44 @@ runs:
     - name: Verify Python available
       shell: bash
       run: |
-        # setup-python is continue-on-error: surface a warning when it could
-        # not provision the requested version so version mismatches aren't
-        # silently masked by a system Python fallback.
+        set -euo pipefail
+
+        resolve_py() {
+          if [ -n "${CI_PYTHON:-}" ] && { [ -x "${CI_PYTHON}" ] || [ -f "${CI_PYTHON}" ]; }; then
+            echo "${CI_PYTHON}"
+            return 0
+          fi
+          if [ -n "${COMFYUI_PYTHON:-}" ] && { [ -x "${COMFYUI_PYTHON}" ] || [ -f "${COMFYUI_PYTHON}" ]; }; then
+            echo "${COMFYUI_PYTHON}"
+            return 0
+          fi
+          # On Windows Git Bash, python3 is often the Microsoft Store stub.
+          if command -v python &>/dev/null; then
+            command -v python
+            return 0
+          fi
+          command -v python3 2>/dev/null || true
+        }
+
         if [ "${{ steps.setup-python.outcome }}" = "failure" ]; then
           echo "::warning::setup-python failed to provision Python '${{ inputs.python-version }}'; falling back to system Python."
         fi
-        if ! command -v python3 &>/dev/null && ! command -v python &>/dev/null; then
-          echo "::error::No Python found. setup-python failed and no system python3 available."
+
+        PY="$(resolve_py)"
+        if [ -z "$PY" ]; then
+          echo "::error::No Python found. Set comfyui_python workflow input or install python on the runner."
           exit 1
         fi
-        PY=$(command -v python3 || command -v python)
+
+        echo "CI_PYTHON=$PY" >> "$GITHUB_ENV"
         echo "Using: $PY ($($PY --version 2>&1))"
 
     - name: Install dependencies
       shell: bash
       run: |
-        # Use `python3 -m pip` (with python fallback) so installs target the
-        # same interpreter selected above, not a possibly-mismatched `pip`.
-        PY=$(command -v python3 || command -v python)
+        set -euo pipefail
+
+        PY="${CI_PYTHON:-${COMFYUI_PYTHON:-$(command -v python || command -v python3)}}"
         "$PY" -m pip install --upgrade pip
         if [ -f requirements.txt ]; then
           "$PY" -m pip install -r requirements.txt
