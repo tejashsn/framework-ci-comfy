@@ -24,7 +24,7 @@ on:
         required: false
         default: 'self-hosted'
       rocm_version:
-        description: 'ROCm build under test (e.g. 7.15.0). Auto-detected from /etc/rocm_metadata.conf if empty.'
+        description: 'ROCm build under test (e.g. 7.15.0). Auto-detected from rocm metadata if empty.'
         required: false
         default: ''
       comfyui_url:
@@ -97,6 +97,10 @@ permissions:
 env:
   PYTHONUNBUFFERED: 1
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # ==================== SETUP ====================
   setup:
@@ -111,12 +115,11 @@ jobs:
       upload_results: ${{ steps.parse.outputs.upload_results }}
 
     steps:
+      - name: Prepare CI shell
+        uses: ./.github/actions/prepare-ci-shell
+
       - name: Fix permissions
-        run: |
-          chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE 2>/dev/null || \
-            sudo -n chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE 2>/dev/null || true
-          chmod -R u+rwX $GITHUB_WORKSPACE 2>/dev/null || \
-            sudo -n chmod -R u+rwX $GITHUB_WORKSPACE 2>/dev/null || true
+        uses: ./.github/actions/fix-permissions
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,7 +127,8 @@ jobs:
       - name: Parse inputs
         id: parse
         run: |
-          python3 tests/src/inference/comfyui/scripts/create_config.py \
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" tests/src/inference/comfyui/scripts/create_config.py \
             --parse-inputs \
             --trigger "${{ github.event_name }}" \
             --models "${{ inputs.model_names || 'comfyui_stable_diffusion_2_1,comfyui_stable_diffusion_xl_base_1.0' }}" \
@@ -135,6 +139,7 @@ jobs:
 
       - name: Summary
         run: |
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
           echo "## ComfyUI Validation Configuration" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Trigger & Execution" >> $GITHUB_STEP_SUMMARY
@@ -156,7 +161,7 @@ jobs:
           echo "**Input:** \`${{ inputs.model_names || 'comfyui_stable_diffusion_2_1,comfyui_stable_diffusion_xl_base_1.0' }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Selected Tests:**" >> $GITHUB_STEP_SUMMARY
-          echo '${{ steps.parse.outputs.models }}' | python3 -c "import json,sys; [print(f'- \`{m}\`') for m in json.load(sys.stdin)]" >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.parse.outputs.models }}' | "$PY" -c "import json,sys; [print(f'- \`{m}\`') for m in json.load(sys.stdin)]" >> $GITHUB_STEP_SUMMARY
 
   # ==================== BENCHMARK ====================
   benchmark:
@@ -189,15 +194,14 @@ jobs:
       UPLOAD_TO_ARTIFACTORY: ${{ inputs.upload_to_artifactory || false }}
 
     steps:
+      - name: Prepare CI shell
+        uses: ./.github/actions/prepare-ci-shell
+
       - name: Clean workspace
-        run: |
-          if [ -d "$GITHUB_WORKSPACE" ]; then
-            chown -R $(id -u):$(id -g) "$GITHUB_WORKSPACE" 2>/dev/null || \
-              sudo -n chown -R $(id -u):$(id -g) "$GITHUB_WORKSPACE" 2>/dev/null || true
-            chmod -R u+rwX "$GITHUB_WORKSPACE" 2>/dev/null || \
-              sudo -n chmod -R u+rwX "$GITHUB_WORKSPACE" 2>/dev/null || true
-          fi
-          rm -rf $GITHUB_WORKSPACE/logs $GITHUB_WORKSPACE/results 2>/dev/null || true
+        uses: ./.github/actions/fix-permissions
+        with:
+          paths: '${{ github.workspace }}'
+          clean_paths: 'logs results'
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -218,6 +222,7 @@ jobs:
         uses: ./.github/actions/setup-rocm-env
         with:
           enable-rocm-path: 'true'
+          enable-hip-path: 'true'
           enable-ld-library-path: 'true'
           enable-hip-platform: 'true'
 
@@ -225,32 +230,51 @@ jobs:
         id: rocm_detect
         run: |
           set -euo pipefail
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
           ROCM_VER="${{ inputs.rocm_version }}"
 
-          # Primary: /etc/rocm_metadata.conf written by ROCmTest/TheRock install
+          _read_meta_key() {
+            local file="$1" key="$2"
+            grep -E "^${key}[[:space:]]*=" "$file" 2>/dev/null \
+              | sed 's/^[^=]*=[[:space:]]*//' | tr -d ' \r' | head -1
+          }
+
+          # Linux: /etc/rocm_metadata.conf written by ROCmTest/TheRock install
           if [ -z "$ROCM_VER" ] && [ -f /etc/rocm_metadata.conf ]; then
-            INSTALLED=$(grep -E '^INSTALLED_VERSION\s*=' /etc/rocm_metadata.conf \
-              | sed 's/^INSTALLED_VERSION\s*=\s*//' | tr -d ' ' || true)
+            INSTALLED="$(_read_meta_key /etc/rocm_metadata.conf INSTALLED_VERSION || true)"
             if [ -n "$INSTALLED" ]; then
               ROCM_VER="${INSTALLED%%-*}"
               echo "ROCm version from /etc/rocm_metadata.conf: $ROCM_VER (full: $INSTALLED)"
             fi
-            GFX_TARGET=$(grep -E '^INSTALLED_GFX_TARGET\s*=' /etc/rocm_metadata.conf \
-              | sed 's/^INSTALLED_GFX_TARGET\s*=\s*//' | tr -d ' ' || true)
+            GFX_TARGET="$(_read_meta_key /etc/rocm_metadata.conf INSTALLED_GFX_TARGET || true)"
             if [ -n "$GFX_TARGET" ]; then
               echo "INSTALLED_GFX_TARGET=$GFX_TARGET" >> "$GITHUB_ENV"
             fi
           fi
 
+          # Windows: TheRock metadata.conf
+          if [ -z "$ROCM_VER" ]; then
+            for meta in "/c/TheRock/build/metadata.conf" /c/TheRock/rocm-*/metadata.conf; do
+              if [ -f "$meta" ]; then
+                INSTALLED="$(_read_meta_key "$meta" INSTALLED_VERSION || true)"
+                if [ -n "$INSTALLED" ]; then
+                  ROCM_VER="${INSTALLED%%-*}"
+                  echo "ROCm version from ${meta}: $ROCM_VER (full: $INSTALLED)"
+                  break
+                fi
+              fi
+            done
+          fi
+
           # Fallback: host capture (logs/bm_config.json from capture-host-info)
           if { [ -z "$ROCM_VER" ] || [ "$ROCM_VER" = "Unknown" ]; } && [ -f logs/bm_config.json ]; then
-            ROCM_VER=$(python3 -c "import json; d=json.load(open('logs/bm_config.json')); print((d.get('rocm_version') or '').strip())" 2>/dev/null || true)
+            ROCM_VER=$("$PY" -c "import json; d=json.load(open('logs/bm_config.json')); print((d.get('rocm_version') or '').strip())" 2>/dev/null || true)
             [ -n "$ROCM_VER" ] && echo "ROCm version from logs/bm_config.json: $ROCM_VER"
           fi
 
           # Fallback: fleet ROCmDetector ($ROCM_PATH/.info/version-rocm, amd-smi, rocminfo)
           if [ -z "$ROCM_VER" ] || [ "$ROCM_VER" = "Unknown" ]; then
-            ROCM_VER=$(python3 -c "
+            ROCM_VER=$("$PY" -c "
           from tests.utils.system.rocm_detector import ROCmDetector
           v = ROCmDetector._detect_rocm_version() or ''
           print(v.split('-')[0] if v else '')
@@ -277,7 +301,8 @@ jobs:
       - name: Detect GPU arch
         id: arch_detect
         run: |
-          python3 tests/src/inference/comfyui/scripts/create_config.py \
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" tests/src/inference/comfyui/scripts/create_config.py \
             --detect-gpu-arch \
             --output-file "$GITHUB_OUTPUT"
 
@@ -287,13 +312,22 @@ jobs:
           mkdir -p logs/benchmark_results
 
           PY="${COMFYUI_PYTHON:-${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}}"
-          PY="${PY:-python3}"
-          if [ -z "${COMFYUI_PATH:-}" ] && [ -d /home/master/ComfyUI ]; then
-            echo "COMFYUI_PATH=/home/master/ComfyUI" >> "$GITHUB_ENV"
+          PY="${PY:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
+          if [ -z "${COMFYUI_PATH:-}" ]; then
+            if [ -d /home/master/ComfyUI ]; then
+              echo "COMFYUI_PATH=/home/master/ComfyUI" >> "$GITHUB_ENV"
+            elif [ -d /c/TheRock/ComfyUI ]; then
+              echo "COMFYUI_PATH=/c/TheRock/ComfyUI" >> "$GITHUB_ENV"
+            fi
           fi
-          if [ "$PY" = "python3" ] && [ -x /home/master/comfyui-host-venv/bin/python ]; then
-            PY=/home/master/comfyui-host-venv/bin/python
-            echo "Using discovered ComfyUI venv Python: $PY"
+          if [ "$PY" = "python3" ] || [ -z "$PY" ]; then
+            if [ -x /home/master/comfyui-host-venv/bin/python ]; then
+              PY=/home/master/comfyui-host-venv/bin/python
+              echo "Using discovered ComfyUI venv Python: $PY"
+            elif [ -x /c/TheRock/.venv314/Scripts/python.exe ]; then
+              PY=/c/TheRock/.venv314/Scripts/python.exe
+              echo "Using discovered Windows ComfyUI venv Python: $PY"
+            fi
           fi
           echo "Using Python: $($PY --version 2>&1)"
           echo "ComfyUI path: ${COMFYUI_PATH:-'(from runner env/discovery)'}"
@@ -329,7 +363,7 @@ jobs:
           # Runtime env snapshot (ComfyUI venv / host Python) for RASTRA payload.
           "$PY" scripts/capture_system_info.py \
             --output logs/container_info.json --packages --pip-list 2>/dev/null || \
-            python3 scripts/capture_system_info.py \
+            "$PY" scripts/capture_system_info.py \
             --output logs/container_info.json --packages --pip-list 2>/dev/null || true
 
           echo "BENCHMARK_EXIT_CODE=$BENCHMARK_EXIT" >> "$GITHUB_ENV"
@@ -337,7 +371,9 @@ jobs:
 
       - name: Generate model summary
         if: always()
-        run: python3 tests/src/inference/comfyui/scripts/generate_summary.py --mode github
+        run: |
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" tests/src/inference/comfyui/scripts/generate_summary.py --mode github
         env:
           RUNNER_HOSTNAME: ${{ env.RUNNER_HOST }}
           COMFYUI_MODEL_NAME: ${{ matrix.model }}
@@ -354,8 +390,9 @@ jobs:
           BENCHMARK_EXIT_CODE: ${{ env.BENCHMARK_EXIT_CODE }}
           ROCM_VERSION: ${{ steps.rocm_detect.outputs.rocm_version }}
         run: |
-          pip install -q requests jsonschema packaging pyyaml
-          python3 tests/src/inference/comfyui/scripts/upload_from_artifacts.py \
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" -m pip install -q requests jsonschema packaging pyyaml
+          "$PY" tests/src/inference/comfyui/scripts/upload_from_artifacts.py \
             --results-dir logs/benchmark_results \
             --execution-label "$EXECUTION_LABEL" \
             || echo "DB upload skipped or failed (non-critical)"
@@ -396,11 +433,16 @@ jobs:
       EXECUTION_LABEL: ${{ inputs.execution_label || github.event_name }}
 
     steps:
+      - name: Prepare CI shell
+        uses: ./.github/actions/prepare-ci-shell
+
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install deps
-        run: pip install -q prettytable pyyaml requests jsonschema packaging
+        run: |
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" -m pip install -q prettytable pyyaml requests jsonschema packaging
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -411,7 +453,8 @@ jobs:
       - name: Consolidate results
         id: consolidate
         run: |
-          python3 tests/src/inference/comfyui/scripts/consolidate_artifacts.py \
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" tests/src/inference/comfyui/scripts/consolidate_artifacts.py \
             --results-dir all_results \
             --output results_summary.md \
             --fail-on-error
@@ -433,7 +476,8 @@ jobs:
           EXECUTION_LABEL: ${{ inputs.execution_label || github.event_name }}
           GITHUB_ACTOR: ${{ github.actor }}
         run: |
-          python3 tests/src/inference/comfyui/scripts/upload_from_artifacts.py \
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" tests/src/inference/comfyui/scripts/upload_from_artifacts.py \
             --results-dir all_results \
             --execution-label "$EXECUTION_LABEL" \
             --save-payload fallback_payload.json \
@@ -442,12 +486,13 @@ jobs:
       - name: Generate RASTRA link
         if: always()
         run: |
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
           PAYLOAD=$(find all_results -name "payload.json" -type f | head -1)
           if [ -z "$PAYLOAD" ] && [ -f "fallback_payload.json" ]; then
             PAYLOAD="fallback_payload.json"
           fi
           if [ -n "$PAYLOAD" ]; then
-            python3 tests/utils/results/rastra_link.py \
+            "$PY" tests/utils/results/rastra_link.py \
               --from-payload "$PAYLOAD" \
               --append-summary \
               --title "View Results in RASTRA Dashboard"

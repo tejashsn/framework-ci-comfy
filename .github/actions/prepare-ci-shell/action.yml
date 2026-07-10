@@ -1,0 +1,33 @@
+name: 'Prepare CI Shell'
+description: 'Git Bash on Windows self-hosted runners; resolve a usable Python for CI steps'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare PATH and Python
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+          for d in "/c/Program Files/Git/bin" "/c/Program Files/Git/usr/bin"; do
+            if [[ -d "$d" ]]; then
+              export PATH="$d:$PATH"
+            fi
+          done
+          echo "PATH=$PATH" >> "$GITHUB_ENV"
+        fi
+
+        PY=""
+        if [[ -n "${COMFYUI_PYTHON:-}" ]] && { [[ -x "${COMFYUI_PYTHON}" ]] || [[ -f "${COMFYUI_PYTHON}" ]]; }; then
+          PY="${COMFYUI_PYTHON}"
+        else
+          PY="$(command -v python 2>/dev/null || command -v python3 2>/dev/null || true)"
+        fi
+
+        if [[ -z "$PY" ]]; then
+          echo "::warning::No python/python3 on PATH after CI shell prep"
+        else
+          echo "CI_PYTHON=$PY" >> "$GITHUB_ENV"
+          echo "Using CI Python: $PY ($($PY --version 2>&1))"
+        fi
