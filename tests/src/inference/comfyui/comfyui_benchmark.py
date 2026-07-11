@@ -151,6 +151,40 @@ def _minutes(seconds):
         return None
 
 
+# Metrics where a HIGHER score is better (throughput-like); everything else
+# (latency, time) is lower-is-better. Lets us stamp the RASTRA flag correctly so
+# future non-latency metrics aren't mislabeled.
+_HIGHER_IS_BETTER = {"throughput", "images_per_s", "frames_per_s", "tokens_per_s"}
+
+
+def _make_metric(metric_name, score, unit, *, primary=False):
+    """Build a RASTRA test_metric with the correct H/L flag for its name."""
+    flag = "H" if metric_name in _HIGHER_IS_BETTER else "L"
+    return {
+        "flag": flag, "metric_name": metric_name, "primary": primary,
+        "score": score, "unit": unit,
+    }
+
+
+def _extract_workflow_params(entry):
+    """Extract generation params from this test's workflow graph (best-effort).
+
+    Returns a flat dict (steps/cfg/sampler/resolution/frames/prompt/...) or {}
+    if the workflow can't be located or parsed. Never raises."""
+    mt = entry.get("_manifest", {}) or {}
+    workflow_rel = mt.get("workflow") or entry.get("workflow")
+    if not workflow_rel:
+        return {}
+    workflow_path = SUITE_DIR / workflow_rel
+    if not workflow_path.exists():
+        return {}
+    try:
+        import workflow_params
+        return workflow_params.extract_params(workflow_path)
+    except Exception:
+        return {}
+
+
 def write_result_json(entry, status_str, evidence_dir, results_dir, meta):
     """Write results_<test>.json in the framework-ci RASTRA result shape from the
     executor's native summary.json/results.json. Latency (if any) becomes the
@@ -172,10 +206,13 @@ def write_result_json(entry, status_str, evidence_dir, results_dir, meta):
     latency = results.get("latency_avg_s")
     metrics = []
     if latency is not None:
-        metrics.append({
-            "flag": "L", "metric_name": "latency", "primary": True,
-            "score": latency, "unit": "seconds",
-        })
+        metrics.append(_make_metric("latency", latency, "seconds", primary=True))
+
+    # Generation params (steps/cfg/sampler/resolution/frames/prompt) pulled from
+    # the workflow graph so RASTRA rows are queryable/comparable. Flattened into
+    # test_config by upload_from_artifacts.py's test_parameters handling.
+    test_params = _extract_workflow_params(entry)
+
     result = {
         "results": [
             {
@@ -195,6 +232,7 @@ def write_result_json(entry, status_str, evidence_dir, results_dir, meta):
                     "git_sha": meta.get("git_sha"),
                     "workflow_hash": meta.get("workflow_hash"),
                     "canonical": meta.get("canonical"),
+                    **({"test_parameters": test_params} if test_params else {}),
                 },
                 "test_execution_time": _minutes(summary.get("duration_s")),
                 "test_log": str((sj.parent / "comfyui_server_tail.log")) if sj else "",
