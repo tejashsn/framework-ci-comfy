@@ -1,8 +1,10 @@
 # ComfyUI Validation Workflow
 # Runs ComfyUI GPU validation on AMD GPUs via self-hosted runners (bare metal).
 #
-# No Docker required: ComfyUI must already be running on the runner host
-# (default http://127.0.0.1:8188). Model weights live under COMFYUI_PATH/models/.
+# ComfyUI is auto-discovered, cloned if missing, and started on every runner
+# (Linux and Windows; default http://127.0.0.1:8188). Model weights live under
+# COMFYUI_PATH/models/. Autostart is on by default on all platforms; set
+# COMFYUI_NO_AUTOSTART=1 or COMFYUI_NO_BOOTSTRAP=1 only to opt out.
 #
 # Triggers:
 #   - Manual (workflow_dispatch)
@@ -330,7 +332,8 @@ jobs:
             fi
           fi
           echo "Using Python: $($PY --version 2>&1)"
-          echo "ComfyUI path: ${COMFYUI_PATH:-'(from runner env/discovery)'}"
+          echo "COMFYUI_PYTHON=$PY" >> "$GITHUB_ENV"
+          echo "ComfyUI path:" ${COMFYUI_PATH:-'(from runner env/discovery)'}"
           echo "ComfyUI URL: ${{ inputs.comfyui_url }}"
 
           "$PY" -m pip install -q -r requirements.txt
@@ -348,10 +351,18 @@ jobs:
           ROCM_VER='${{ steps.rocm_detect.outputs.rocm_version }}'
           echo "Using ROCm version: $ROCM_VER"
 
+          OS_VER="linux"
+          UNAME_S="$(uname -s 2>/dev/null || echo unknown)"
+          if [[ "$UNAME_S" == *MINGW* ]] || [[ "$UNAME_S" == *MSYS* ]] || [[ -d /c/TheRock ]] || [[ -d /c/Windows ]]; then
+            OS_VER="windows"
+          fi
+          echo "Using OS version: $OS_VER"
+
           set +e
           "$PY" tests/src/inference/comfyui/comfyui_benchmark.py \
             --model '${{ matrix.model }}' \
             --rocm-version "$ROCM_VER" \
+            --os-version "$OS_VER" \
             --comfyui-url '${{ inputs.comfyui_url }}' \
             --execution-label "${EXECUTION_LABEL}" \
             --results-dir logs/benchmark_results \
