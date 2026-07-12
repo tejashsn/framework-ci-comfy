@@ -283,8 +283,10 @@ def main():
         write_gha_output("result", "DRY_RUN_OK")
         sys.exit(0)
 
-    # Ensure ComfyUI is reachable (auto-bootstrap + auto-start when needed).
-    if not ensure_comfyui_available(args.comfyui_url):
+    # Check ComfyUI reachable. Autostart/bootstrap is handled upstream by
+    # comfyui_benchmark.ensure_server() before any test dispatch, so by the
+    # time this validator runs the server is already up; here we just verify.
+    if not check_comfyui(args.comfyui_url):
         print(f"[INFRA_ERROR] ComfyUI not reachable at {args.comfyui_url}", file=sys.stderr)
         write_gha_output("result", "INFRA_ERROR")
         write_gha_output("infra_error", f"comfyui_unreachable:{args.comfyui_url}")
