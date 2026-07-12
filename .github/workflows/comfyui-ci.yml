@@ -333,7 +333,7 @@ jobs:
           fi
           echo "Using Python: $($PY --version 2>&1)"
           echo "COMFYUI_PYTHON=$PY" >> "$GITHUB_ENV"
-          echo "ComfyUI path:" ${COMFYUI_PATH:-'(from runner env/discovery)'}"
+          echo "ComfyUI path: ${COMFYUI_PATH:-(from runner env/discovery)}"
           echo "ComfyUI URL: ${{ inputs.comfyui_url }}"
 
           "$PY" -m pip install -q -r requirements.txt
