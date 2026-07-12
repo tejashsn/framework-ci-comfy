@@ -1,0 +1,17 @@
+{
+  "machine_alias": "mukhtar-4-3604",
+  "hostname_pattern": "mukhtar-4-3604",
+  "gpu_arch": "gfx1153",
+  "gpu_name": "AMD Radeon 820M (gfx1153 iGPU)",
+  "os_platform": "windows",
+  "os_version": "windows-11",
+  "runner_label": "gfx1153",
+  "comfyui_path": "C:/TheRock/ComfyUI",
+  "comfyui_venv": "C:/TheRock/.venv314",
+  "comfyui_url": "http://127.0.0.1:8188",
+  "python_bin": "C:/TheRock/.venv314/Scripts/python.exe",
+  "comfyui_extra_args": [
+    "--disable-pinned-memory",
+    "--cpu-vae"
+  ]
+}

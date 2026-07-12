@@ -148,6 +148,7 @@ def discover_comfyui_path(profile):
         REPO_ROOT / "ComfyUI",
         Path("C:/ComfyUI"),
         Path("C:/ComfyUI_windows_portable/ComfyUI"),
+        Path("C:/TheRock/ComfyUI"),
         Path("/opt/ComfyUI"),
     ]
     for c in candidates:
@@ -171,11 +172,13 @@ def discover_comfyui_path(profile):
 
 def _bootstrap_target(profile):
     """Where to install ComfyUI when bootstrapping. Honour a configured
-    comfyui_path / $COMFYUI_PATH if given, otherwise install beside this repo."""
+    comfyui_path / $COMFYUI_PATH if given, otherwise use a sensible default."""
     profile = profile or {}
     configured = profile.get("comfyui_path") or os.environ.get("COMFYUI_PATH")
     if configured:
         return _expand(configured)
+    if os.name == "nt" and Path("C:/TheRock").is_dir():
+        return Path("C:/TheRock/ComfyUI")
     return REPO_ROOT.parent / "ComfyUI"
 
 
@@ -192,6 +195,10 @@ def resolve_comfyui_python(profile, comfy_path):
     """
     profile = profile or {}
     comfy_path = Path(comfy_path)
+
+    env_py = os.environ.get("COMFYUI_PYTHON", "").strip()
+    if env_py and Path(env_py).exists():
+        return env_py
 
     def _venv_python(venv_dir):
         venv_dir = _expand(venv_dir)

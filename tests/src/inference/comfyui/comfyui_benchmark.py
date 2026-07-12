@@ -16,7 +16,7 @@ bare node both invoke the same way. It does four things:
   4. Write benchmark_summary.json.
 
 Two ways to run:
-  * CI / bare-metal node with ComfyUI already running -> invoke directly.
+  * CI / bare-metal node -> auto-discovers, clones (if needed), and starts ComfyUI.
   * Optional: pass --docker-image to self-wrap in a container (not used by CI).
 
 Examples:
@@ -344,8 +344,63 @@ def parse_args():
     p.add_argument("--config-file", dest="config_file",
                    default=str(CONFIG_DIR / "models_config.yaml"))
     p.add_argument("--docker-image", dest="docker_image", default="")
-    p.add_argument("--docker-gpu-flags", dest="docker_gpu_flags", default="")
+    p.add_argument("--no-autostart", dest="no_autostart", action="store_true",
+                   help="Fail if ComfyUI is not already running (do not launch).")
+    p.add_argument("--no-bootstrap", dest="no_bootstrap", action="store_true",
+                   help="Do not git-clone ComfyUI; only start an existing install.")
+    p.add_argument("--startup-timeout-s", dest="startup_timeout_s", type=int, default=300,
+                   help="Seconds to wait for ComfyUI to become reachable.")
     return p.parse_args()
+
+
+def load_profile():
+    """Build a machine profile from config file + workflow env overrides."""
+    profile = {}
+    prof_path = CONFIG_DIR / "machine_profile.json"
+    if prof_path.exists():
+        try:
+            profile = json.loads(prof_path.read_text(encoding="utf-8"))
+        except Exception:
+            profile = {}
+    if os.environ.get("COMFYUI_PATH"):
+        profile["comfyui_path"] = os.environ["COMFYUI_PATH"]
+    if os.environ.get("COMFYUI_PYTHON"):
+        profile["python_bin"] = os.environ["COMFYUI_PYTHON"]
+    return profile
+
+
+def ensure_server(args):
+    """Locate, bootstrap, and start ComfyUI when not already reachable.
+
+    Autostart is the default on all platforms (Linux and Windows). Pass
+    --no-autostart or set COMFYUI_NO_AUTOSTART=1 to opt out.
+    """
+    import comfyui_runtime
+
+    if comfyui_runtime.comfyui_up(args.comfyui_url):
+        status(f"ComfyUI already up at {args.comfyui_url}", kind="info")
+        return True
+
+    if args.no_autostart or os.environ.get("COMFYUI_NO_AUTOSTART", "").lower() in ("1", "true", "yes"):
+        status(f"ComfyUI not reachable at {args.comfyui_url} and autostart disabled",
+               kind="error")
+        return False
+
+    status(f"ComfyUI not reachable at {args.comfyui_url}; bootstrapping/starting...",
+           kind="info")
+    allow_bootstrap = not args.no_bootstrap and \
+        os.environ.get("COMFYUI_NO_BOOTSTRAP", "").lower() not in ("1", "true", "yes")
+    return comfyui_runtime.ensure_comfyui_running(
+        load_profile(), args.comfyui_url,
+        allow_bootstrap=allow_bootstrap,
+        timeout_s=args.startup_timeout_s,
+    )
+
+
+def detect_os_version():
+    if os.name == "nt":
+        return "windows"
+    return "linux"
 
 
 def os_family(os_version):
@@ -358,9 +413,16 @@ def main():
         return run_in_docker(args)
 
     phase("COMFYUI BENCHMARK", kind="run")
+    if not args.os_version or args.os_version == "linux":
+        if os.name == "nt":
+            args.os_version = detect_os_version()
     if not args.arch:
         args.arch = detect_arch()
         status(f"detected arch: {args.arch or '(unknown)'}", kind="info")
+
+    if not ensure_server(args):
+        status("could not reach or start ComfyUI", kind="error")
+        return 1
 
     models_cfg = load_yaml(args.config_file)
     manifest = load_manifest(CONFIG_DIR / "suite_manifest.json")
