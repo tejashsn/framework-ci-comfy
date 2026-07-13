@@ -1,0 +1,54 @@
+---
+description: PR title and body format for framework-ci-comfy (Motivation / Technical Details / Checklist)
+alwaysApply: true
+---
+
+# Pull request description style
+
+When creating a PR (`gh pr create`) for this repo, use this structure exactly:
+
+## Title
+
+One imperative line: what the change does and where (e.g. `Bundle workflow input assets and harden ComfyUI CI failure handling`).
+
+## Body
+
+Use three sections with `##` headings:
+
+### Motivation
+
+- State the problem and why now.
+- Link related PRs, GitHub issues, or Jira tickets when they exist.
+- Explain user/runner impact if the workflow behavior changes.
+
+### Technical Details
+
+- Describe the approach (not a file list dump).
+- Note platform/arch scope, env vars, and what runs at prefetch vs per-test vs post-failure.
+- Mention breaking changes or ops steps (secrets, `COMFYUI_PATH`, new assets).
+
+### Submission Checklist
+
+Copy checklist items from `.github/pull_request_template.md` and check off what was verified.
+
+## Example skeleton
+
+```markdown
+## Motivation
+
+Prior CI runs failed with HTTP 400 on LoadImage nodes because only model weights were prefetched, not `ComfyUI/input/` assets. Poll timeouts also masked ComfyUI server crashes.
+
+## Technical Details
+
+- Add bundled Comfy-Org template images under `assets/input/` and prefetch via `fetch_workflow_inputs.py`.
+- Classify server crashes as `INFRA_ERROR` in `failure_classify.py`.
+- Restart ComfyUI after non-PASS tests in `comfyui_benchmark.py`.
+
+## Submission Checklist
+
+- [ ] Look over the contributing guidelines at ...
+- [ ] `python -m pytest tests/unit -q` passes
+- [ ] ...
+```
+
+Do not use a bare bullet list without these three sections.
