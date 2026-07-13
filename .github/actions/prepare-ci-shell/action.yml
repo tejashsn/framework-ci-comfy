@@ -25,6 +25,15 @@ runs:
           $py = (Get-Command python -ErrorAction SilentlyContinue).Source
         }
         if ($py) {
+          $yamlOk = $false
+          try {
+            & $py -c "import yaml" 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { $yamlOk = $true }
+          } catch {}
+          if (-not $yamlOk) {
+            Write-Host "::warning::CI Python missing PyYAML; installing pyyaml into $py"
+            & $py -m pip install -q pyyaml
+          }
           "CI_PYTHON=$py" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Using CI Python: $py"
           & $py --version
@@ -48,6 +57,10 @@ runs:
         if [[ -z "$PY" ]]; then
           echo "::warning::No python/python3 on PATH after CI shell prep"
         else
+          if ! "$PY" -c "import yaml" >/dev/null 2>&1; then
+            echo "::warning::CI Python missing PyYAML; installing pyyaml into $PY"
+            "$PY" -m pip install -q pyyaml
+          fi
           echo "CI_PYTHON=$PY" >> "$GITHUB_ENV"
           echo "Using CI Python: $PY ($($PY --version 2>&1))"
         fi

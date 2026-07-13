@@ -128,7 +128,9 @@ jobs:
   # ==================== SETUP ====================
   setup:
     name: "Setup"
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, "${{ inputs.runner_label || 'self-hosted' }}"]
+    env:
+      COMFYUI_PYTHON: ${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}
     outputs:
       models: ${{ steps.parse.outputs.models }}
       model_count: ${{ steps.parse.outputs.model_count }}
@@ -150,7 +152,7 @@ jobs:
       - name: Parse inputs
         id: parse
         run: |
-          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
           "$PY" tests/src/inference/comfyui/scripts/create_config.py \
             --parse-inputs \
             --trigger "${{ github.event_name }}" \
@@ -162,7 +164,7 @@ jobs:
 
       - name: Summary
         run: |
-          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
           echo "## ComfyUI Validation Configuration" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Trigger & Execution" >> $GITHUB_STEP_SUMMARY
