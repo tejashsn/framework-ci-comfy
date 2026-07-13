@@ -392,7 +392,8 @@ jobs:
       - name: Print execution summary
         if: always()
         run: |
-          python3 tests/src/inference/comfyui/scripts/print_execution_summary.py \
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" tests/src/inference/comfyui/scripts/print_execution_summary.py \
             --results-dir logs/benchmark_results \
             --logs-dir logs
         env:
@@ -447,7 +448,7 @@ jobs:
   consolidate:
     name: "Consolidate"
     needs: [setup, benchmark]
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, Linux]
     if: always()
 
     env:
@@ -483,7 +484,8 @@ jobs:
       - name: Print execution summary
         if: always()
         run: |
-          python3 tests/src/inference/comfyui/scripts/print_execution_summary.py \
+          PY="${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}"
+          "$PY" tests/src/inference/comfyui/scripts/print_execution_summary.py \
             --results-dir all_results \
             --logs-dir all_results
 
@@ -544,7 +546,7 @@ jobs:
   summary:
     name: "Done"
     needs: [setup, benchmark, consolidate]
-    runs-on: [self-hosted]
+    runs-on: [self-hosted, Linux]
     if: always()
 
     steps:
