@@ -18,6 +18,7 @@ tests/src/inference/comfyui/
     model_check.py              # Presence + identity gate
   scripts/
     create_config.py            # Matrix + models_config regeneration
+    prefetch_models.py          # Bulk-prefetch weights before the matrix (prefetch job)
     fetch_models.py             # Auto-download missing weights (executors/)
     generate_summary.py         # Per-job GitHub Step Summary table
     upload_from_artifacts.py    # RASTRA payload build + POST
@@ -38,6 +39,8 @@ python tests/src/inference/comfyui/comfyui_benchmark.py \
 ## CI
 
 Workflow: `.github/workflows/comfyui-ci.yml` (`ComfyUI Validation`).
+
+Jobs run in order: **setup → prefetch (per runner label) → benchmark (model × runner_label matrix) → consolidate → summary**. The prefetch job downloads every selected test's weights once per runner so matrix jobs reuse the warmed cache instead of cold-starting large downloads.
 
 **Bare metal only** — no Docker. The runner must have ComfyUI listening at
 `comfyui_url` (default `http://127.0.0.1:8188`) and weights under

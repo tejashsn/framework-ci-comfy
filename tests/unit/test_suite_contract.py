@@ -321,3 +321,39 @@ def test_prune_skips_video(tmp_path):
     )
     assert ok == 1 and fail == 0
     assert "comfyui_sd21" in upload_base
+
+
+# --------------------------------------------------------------------------- #
+# prefetch_models: bulk model prefetch before the benchmark matrix
+# --------------------------------------------------------------------------- #
+def test_prefetch_collect_missing_union(tmp_path):
+    import prefetch_models
+    comfy = tmp_path / "ComfyUI"
+    (comfy / "models" / "checkpoints").mkdir(parents=True)
+    names = ["comfyui_stable_diffusion_2_1", "comfyui_flux1_schnell"]
+    missing = prefetch_models.collect_missing_for_tests(names, str(comfy))
+    files = {m[0] for m in missing}
+    assert "v1-5-pruned-emaonly-fp16.safetensors" in files
+    assert "flux1-schnell-fp8.safetensors" in files
+
+
+def test_prefetch_skips_when_all_present(tmp_path, monkeypatch):
+    import prefetch_models
+    monkeypatch.setenv("AUTO_FETCH_MODELS", "true")
+    comfy = tmp_path / "ComfyUI"
+    ckpt = comfy / "models" / "checkpoints"
+    ckpt.mkdir(parents=True)
+    (ckpt / "v1-5-pruned-emaonly-fp16.safetensors").write_bytes(b"x")
+    rc = prefetch_models.prefetch_tests(
+        ["comfyui_stable_diffusion_2_1"], str(comfy),
+    )
+    assert rc == 0
+
+
+def test_prefetch_disabled_is_noop(tmp_path, monkeypatch):
+    import prefetch_models
+    monkeypatch.setenv("AUTO_FETCH_MODELS", "false")
+    rc = prefetch_models.prefetch_tests(
+        ["comfyui_stable_diffusion_2_1"], str(tmp_path / "ComfyUI"),
+    )
+    assert rc == 0

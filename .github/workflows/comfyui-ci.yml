@@ -10,7 +10,7 @@
 #   - Manual (workflow_dispatch)
 #   - workflow_call (fleet orchestrators)
 #
-# Jobs: setup -> benchmark (matrix) -> consolidate -> summary
+# Jobs: setup -> prefetch (per runner label) -> benchmark (matrix) -> consolidate -> summary
 
 name: ComfyUI Validation
 
@@ -165,10 +165,66 @@ jobs:
           echo "**Selected Tests:**" >> $GITHUB_STEP_SUMMARY
           echo '${{ steps.parse.outputs.models }}' | "$PY" -c "import json,sys; [print(f'- \`{m}\`') for m in json.load(sys.stdin)]" >> $GITHUB_STEP_SUMMARY
 
+  # ==================== PREFETCH ====================
+  prefetch:
+    name: "Prefetch (${{ matrix.runner_label }})"
+    needs: setup
+    runs-on: [self-hosted, '${{ matrix.runner_label }}']
+    timeout-minutes: 1080
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runner_label: ${{ fromJson(needs.setup.outputs.runner_labels) }}
+
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      AUTO_FETCH_MODELS: "true"
+      COMFYUI_PREFER_ARTIFACTORY: "true"
+      ARTIFACTORY_URL: ${{ vars.ARTIFACTORY_URL || 'https://compute-artifactory.amd.com' }}
+      COMFYUI_MODELS_ARTIFACTORY_REPO: ${{ vars.COMFYUI_MODELS_ARTIFACTORY_REPO || 'artifactory/rocm-qa-model-cache/comfyui' }}
+      ARTIFACTORY_USER: ${{ secrets.ARTIFACTORY_USER }}
+      ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+      COMFYUI_PATH: ${{ inputs.comfyui_path || vars.COMFYUI_PATH || '' }}
+      COMFYUI_PYTHON: ${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare CI shell
+        uses: ./.github/actions/prepare-ci-shell
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: '3.x'
+          gpu-family: ${{ vars.GPU_FAMILY || '' }}
+          execution-label: ${{ inputs.execution_label || github.event_name }}
+
+      - name: Resolve ComfyUI environment
+        run: |
+          source .github/scripts/comfyui-ci-env.sh
+          resolve_comfyui_env
+
+      - name: Prefetch model weights
+        run: |
+          set -euo pipefail
+          PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
+          "$PY" -m pip install -q -r requirements.txt
+          "$PY" tests/src/inference/comfyui/scripts/prefetch_models.py \
+            --models-json '${{ needs.setup.outputs.models }}'
+
+      - name: Prefetch summary
+        if: always()
+        run: |
+          echo "## Model prefetch (${{ matrix.runner_label }})" >> $GITHUB_STEP_SUMMARY
+          echo "ComfyUI path: \`${COMFYUI_PATH:-unknown}\`" >> $GITHUB_STEP_SUMMARY
+
   # ==================== BENCHMARK ====================
   benchmark:
     name: "${{ matrix.runner_label }} / ${{ matrix.model }}"
-    needs: setup
+    needs: [setup, prefetch]
     runs-on: [self-hosted, '${{ matrix.runner_label }}']
     timeout-minutes: 1080
 
@@ -313,27 +369,9 @@ jobs:
           set -euo pipefail
           mkdir -p logs/benchmark_results
 
-          PY="${COMFYUI_PYTHON:-${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}}"
-          PY="${PY:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
-          if [ -z "${COMFYUI_PATH:-}" ]; then
-            if [ -d /home/master/ComfyUI ]; then
-              echo "COMFYUI_PATH=/home/master/ComfyUI" >> "$GITHUB_ENV"
-            elif [ -d /c/TheRock/ComfyUI ]; then
-              echo "COMFYUI_PATH=/c/TheRock/ComfyUI" >> "$GITHUB_ENV"
-            fi
-          fi
-          if [ "$PY" = "python3" ] || [ -z "$PY" ]; then
-            if [ -x /home/master/comfyui-host-venv/bin/python ]; then
-              PY=/home/master/comfyui-host-venv/bin/python
-              echo "Using discovered ComfyUI venv Python: $PY"
-            elif [ -x /c/TheRock/.venv314/Scripts/python.exe ]; then
-              PY=/c/TheRock/.venv314/Scripts/python.exe
-              echo "Using discovered Windows ComfyUI venv Python: $PY"
-            fi
-          fi
-          echo "Using Python: $($PY --version 2>&1)"
-          echo "COMFYUI_PYTHON=$PY" >> "$GITHUB_ENV"
-          echo "ComfyUI path: ${COMFYUI_PATH:-(from runner env/discovery)}"
+          source .github/scripts/comfyui-ci-env.sh
+          resolve_comfyui_env
+          PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
           echo "ComfyUI URL: ${{ inputs.comfyui_url }}"
 
           "$PY" -m pip install -q -r requirements.txt
