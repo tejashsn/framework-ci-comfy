@@ -389,6 +389,16 @@ jobs:
           RUNNER_HOSTNAME: ${{ env.RUNNER_HOST }}
           COMFYUI_MODEL_NAME: ${{ matrix.model }}
 
+      - name: Print execution summary
+        if: always()
+        run: |
+          python3 tests/src/inference/comfyui/scripts/print_execution_summary.py \
+            --results-dir logs/benchmark_results \
+            --logs-dir logs
+        env:
+          RUNNER_HOSTNAME: ${{ env.RUNNER_HOST }}
+          ROCM_VERSION: ${{ steps.rocm_detect.outputs.rocm_version }}
+
       - name: Upload results to database
         if: always() && needs.setup.outputs.upload_results == 'true'
         env:
@@ -469,6 +479,13 @@ jobs:
             --results-dir all_results \
             --output results_summary.md \
             --fail-on-error
+
+      - name: Print execution summary
+        if: always()
+        run: |
+          python3 tests/src/inference/comfyui/scripts/print_execution_summary.py \
+            --results-dir all_results \
+            --logs-dir all_results
 
       - name: Add to summary
         if: always()
