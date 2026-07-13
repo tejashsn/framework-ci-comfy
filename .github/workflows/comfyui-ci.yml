@@ -10,7 +10,7 @@
 #   - Manual (workflow_dispatch)
 #   - workflow_call (fleet orchestrators)
 #
-# Jobs: setup -> prefetch (per runner label) -> benchmark (matrix) -> consolidate -> summary
+# Jobs: setup -> verify-environment (per runner) -> prefetch -> benchmark -> consolidate -> summary
 
 name: ComfyUI Validation
 
@@ -53,6 +53,18 @@ on:
         description: 'Upload logs to Artifactory'
         type: boolean
         default: true
+      torch_wheel_url:
+        description: 'Expected PyTorch wheel URL (for env verification; version parsed from filename)'
+        required: false
+        default: ''
+      torchvision_wheel_url:
+        description: 'Expected torchvision wheel URL (for env verification)'
+        required: false
+        default: ''
+      torchaudio_wheel_url:
+        description: 'Expected torchaudio wheel URL (for env verification)'
+        required: false
+        default: ''
 
   workflow_call:
     inputs:
@@ -83,6 +95,15 @@ on:
       upload_to_artifactory:
         type: boolean
         default: true
+      torch_wheel_url:
+        type: string
+        default: ''
+      torchvision_wheel_url:
+        type: string
+        default: ''
+      torchaudio_wheel_url:
+        type: string
+        default: ''
     secrets:
       HF_TOKEN:
         required: false
@@ -153,6 +174,9 @@ jobs:
           echo "| **ComfyUI URL** | \`${{ inputs.comfyui_url || 'http://127.0.0.1:8188' }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **ComfyUI Path** | \`${{ inputs.comfyui_path || '$COMFYUI_PATH on runner' }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **ROCm Version** | \`${{ inputs.rocm_version || '(auto)' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Torch wheel URL** | \`${{ inputs.torch_wheel_url || '(not set)' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **torchvision wheel URL** | \`${{ inputs.torchvision_wheel_url || '(not set)' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **torchaudio wheel URL** | \`${{ inputs.torchaudio_wheel_url || '(not set)' }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Execution Label** | \`${{ inputs.execution_label || 'manual' }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Upload to DB** | \`${{ steps.parse.outputs.upload_results }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Upload to Artifactory** | \`${{ inputs.upload_to_artifactory }}\` |" >> $GITHUB_STEP_SUMMARY
@@ -164,6 +188,95 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Selected Tests:**" >> $GITHUB_STEP_SUMMARY
           echo '${{ steps.parse.outputs.models }}' | "$PY" -c "import json,sys; [print(f'- \`{m}\`') for m in json.load(sys.stdin)]" >> $GITHUB_STEP_SUMMARY
+
+  # ==================== VERIFY ENVIRONMENT ====================
+  # One report per runner label: ROCm paths, TheRock tarball/commit, torch stack.
+  # Compare runtime_environment.json across workflow runs to see build-to-build drift.
+  verify-environment:
+    name: "Verify environment (${{ matrix.runner_label }})"
+    needs: setup
+    runs-on: [self-hosted, '${{ matrix.runner_label }}']
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runner_label: ${{ fromJson(needs.setup.outputs.runner_labels) }}
+
+    env:
+      COMFYUI_PATH: ${{ inputs.comfyui_path || vars.COMFYUI_PATH || '' }}
+      COMFYUI_PYTHON: ${{ inputs.comfyui_python || vars.COMFYUI_PYTHON || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare CI shell
+        uses: ./.github/actions/prepare-ci-shell
+
+      - name: Setup test environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: '3.x'
+          gpu-family: ${{ vars.GPU_FAMILY || '' }}
+          execution-label: ${{ inputs.execution_label || github.event_name }}
+
+      - name: Load ROCm from metadata
+        uses: ./.github/actions/load-rocm-from-metadata
+
+      - name: Setup ROCm environment
+        uses: ./.github/actions/setup-rocm-env
+        with:
+          enable-rocm-path: 'true'
+          enable-hip-path: 'true'
+          enable-ld-library-path: 'true'
+          enable-hip-platform: 'true'
+
+      - name: Capture runtime environment
+        run: |
+          set -euo pipefail
+          mkdir -p logs
+          source .github/scripts/comfyui-ci-env.sh
+          resolve_comfyui_env
+          PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
+
+          DRIFT_ARGS=()
+          EXPECTED='${{ inputs.rocm_version }}'
+          if [ -n "$EXPECTED" ]; then
+            DRIFT_ARGS+=(--expected-rocm "$EXPECTED" --fail-on-drift)
+          fi
+          TORCH_URL='${{ inputs.torch_wheel_url }}'
+          VISION_URL='${{ inputs.torchvision_wheel_url }}'
+          AUDIO_URL='${{ inputs.torchaudio_wheel_url }}'
+          [ -n "$TORCH_URL" ] && DRIFT_ARGS+=(--expected-torch-url "$TORCH_URL")
+          [ -n "$VISION_URL" ] && DRIFT_ARGS+=(--expected-torchvision-url "$VISION_URL")
+          [ -n "$AUDIO_URL" ] && DRIFT_ARGS+=(--expected-torchaudio-url "$AUDIO_URL")
+          if [ -n "$TORCH_URL" ] || [ -n "$VISION_URL" ] || [ -n "$AUDIO_URL" ]; then
+            DRIFT_ARGS+=(--fail-on-wheel-drift)
+          fi
+
+          "$PY" scripts/capture_runtime_environment.py \
+            --python "$PY" \
+            --output logs/runtime_environment.json \
+            --markdown logs/runtime_environment.md \
+            "${DRIFT_ARGS[@]}"
+
+      - name: Publish environment report
+        if: always()
+        run: |
+          if [ -f logs/runtime_environment.md ]; then
+            cat logs/runtime_environment.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload environment report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-${{ matrix.runner_label }}-${{ github.run_id }}
+          path: |
+            logs/runtime_environment.json
+            logs/runtime_environment.md
+          if-no-files-found: warn
 
   # ==================== PREFETCH ====================
   prefetch:
@@ -224,7 +337,7 @@ jobs:
   # ==================== BENCHMARK ====================
   benchmark:
     name: "${{ matrix.runner_label }} / ${{ matrix.model }}"
-    needs: [setup, prefetch]
+    needs: [setup, prefetch, verify-environment]
     runs-on: [self-hosted, '${{ matrix.runner_label }}']
     timeout-minutes: 1080
 

@@ -17,6 +17,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 SUITE = REPO / "tests" / "src" / "inference" / "comfyui"
 sys.path.insert(0, str(REPO))
+sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(SUITE))
 sys.path.insert(0, str(SUITE / "executors"))
 sys.path.insert(0, str(SUITE / "scripts"))
@@ -420,3 +421,80 @@ def test_test_requirements_arch_and_vram_skip():
         test, gpu_arch="gfx1100", os_family="linux", python_exe=sys.executable)
     # VRAM may pass or be skipped on hosts without torch GPU; arch must pass.
     assert ok or "VRAM" in reason or "vram" in reason.lower()
+
+
+def test_capture_runtime_environment_markdown_shape():
+    import capture_runtime_environment as cre
+
+    report = {
+        "captured_at": "2026-07-13T00:00:00+00:00",
+        "runner_name": "ctr-navi4x-at48-ws003",
+        "metadata_file": "/c/TheRock/rocm-7.14.0rc2/metadata.conf",
+        "rocm_stack": {
+            "rocm_active": "7.14.0rc2 -> C:/TheRock/rocm-7.14.0rc2",
+            "rocm_path": "C:/TheRock/rocm-7.14.0rc2",
+            "hip_path_user": "C:/TheRock/rocm-7.14.0rc2",
+            "hip_path_machine": "C:/TheRock/build",
+            "source_tarball": "therock-dist-windows-gfx1153-7.14.0rc2.tar.gz",
+            "therock_commit": "d1674be5a71ce9919474a4b2cbd335f387322822",
+            "installed_version": "7.14.0rc2",
+        },
+        "python_ml_runtime": {
+            "venv": "C:/TheRock/.venv314",
+            "python_version": "3.14.6",
+            "torch": "2.12.0+rocm7.14.0rc2",
+            "torchvision": "0.27.0+rocm7.14.0rc2",
+            "torchaudio": "2.11.0+rocm7.14.0rc2",
+            "hip_torch": "7.14.60850",
+            "rocm_sdk": "7.14.0rc2",
+            "device_wheels": "amd-torch-device-gfx1153, rocm-sdk-device-gfx1153",
+            "gpu_detected": True,
+            "gpu_arch": "gfx1153",
+        },
+    }
+    md = cre.format_markdown(report, expected_rocm="7.14.*")
+    assert "ROCm (active)" in md
+    assert "therock-dist-windows-gfx1153" in md
+    assert "amd-torch-device-gfx1153" in md
+    assert "MISMATCH" not in md
+
+
+def test_capture_runtime_environment_rocm_drift():
+    import capture_runtime_environment as cre
+
+    assert cre._match_expected("7.14.0rc2", "7.14.*") is True
+    assert cre._match_expected("7.15.0", "7.14.*") is False
+    assert cre._match_expected("", "7.14.*") is None
+
+
+def test_version_from_wheel_url():
+    import capture_runtime_environment as cre
+
+    url = (
+        "https://artifactory.example.com/torch-2.12.0%2Brocm7.14.0rc2-"
+        "cp314-cp314-win_amd64.whl"
+    )
+    assert cre._version_from_wheel_url(url, "torch") == "2.12.0+rocm7.14.0rc2"
+    assert cre._wheel_versions_match("2.12.0+rocm7.14.0rc2", "2.12.0+rocm7.14.0rc2") is True
+    assert cre._wheel_versions_match("2.11.0+rocm7.14.0rc2", "2.12.0+rocm7.14.0rc2") is False
+
+
+def test_capture_runtime_environment_wheel_comparison_markdown():
+    import capture_runtime_environment as cre
+
+    report = cre.collect(sys.executable)
+    wheels = cre.build_expected_wheels(
+        torch_url="https://example.com/torch-2.12.0%2Brocm7.14.0rc2-cp314-cp314-win_amd64.whl",
+        torchvision_url="https://example.com/torchvision-0.27.0%2Brocm7.14.0rc2-cp314-cp314-win_amd64.whl",
+    )
+    cre.attach_wheel_expectations(report, wheels)
+    report["python_ml_runtime"]["torch"] = "2.12.0+rocm7.14.0rc2"
+    report["python_ml_runtime"]["torchvision"] = "0.26.0+rocm7.14.0rc2"
+    report["wheel_comparisons"]["torch"]["match"] = True
+    report["wheel_comparisons"]["torchvision"]["match"] = False
+
+    md = cre.format_markdown(report, expected_wheels=wheels)
+    assert "Expected (workflow URL)" in md
+    assert "example.com/torch-2.12.0" in md
+    assert "**MISMATCH**" in md
+    assert "### Wheel URLs (workflow inputs)" in md
