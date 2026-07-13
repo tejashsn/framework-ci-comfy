@@ -145,7 +145,7 @@ def collect_test_results(results_dir: Path, env_deps: list) -> list:
                 "test_config": test_config,
                 "metrics": metrics,
             })
-        print(f"  ✓ {f.name}")
+        print(f"  OK {f.name}")
     return test_results
 
 
@@ -292,7 +292,7 @@ def main():
     logs_dir = results_dir.parent if results_dir.name == "benchmark_results" else Path("logs")
 
     if not args.force and list(Path("logs").glob("**/payload.json")):
-        print("✅ payload.json found - upload already happened. Use --force to override.")
+        print("[OK] payload.json found - upload already happened. Use --force to override.")
         return 0
 
     if not _HAVE_FRAMEWORK:
@@ -308,10 +308,10 @@ def main():
             logs_dir=logs_dir,
         )
     except ValueError as e:
-        print(f"❌ {e}")
+        print(f"[ERROR] {e}")
         return 1
 
-    print("✓ Payload validated")
+    print("[OK] Payload validated")
     print(f"\nParsed {len(test_results)} result row(s)")
 
     payload_name = "logs/payload.json" if Path("logs").is_dir() else "payload.json"
@@ -327,7 +327,7 @@ def main():
     print(f"Uploading to perf API: {api_url}")
 
     ok = ResultsAPI(api_url, api_key).submit_results(payload)
-    print("✅ Upload successful!" if ok else "❌ Upload failed")
+    print("[OK] Upload successful!" if ok else "[FAIL] Upload failed")
     return 0 if ok else 1
 
 

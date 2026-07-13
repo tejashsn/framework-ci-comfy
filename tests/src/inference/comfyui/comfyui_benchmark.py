@@ -407,6 +407,25 @@ def os_family(os_version):
     return "windows" if "windows" in (os_version or "").lower() else "linux"
 
 
+def recover_server(args):
+    """Restart ComfyUI after a failed test so the next test starts clean."""
+    import comfyui_runtime
+    profile = load_profile()
+    status("recovering ComfyUI server after non-PASS test", kind="info")
+    try:
+        if comfyui_runtime.comfyui_up(args.comfyui_url):
+            return comfyui_runtime.restart_comfyui(
+                profile, args.comfyui_url, timeout_s=args.startup_timeout_s)
+        return comfyui_runtime.ensure_comfyui_running(
+            profile, args.comfyui_url,
+            allow_bootstrap=not args.no_bootstrap,
+            timeout_s=args.startup_timeout_s,
+        )
+    except Exception as e:
+        status(f"ComfyUI recovery failed: {e}", kind="error")
+        return False
+
+
 def main():
     args = parse_args()
     if args.docker_image and not os.environ.get("COMFYUI_IN_CONTAINER"):
@@ -446,6 +465,8 @@ def main():
         counts[st] = counts.get(st, 0) + 1
         write_result_json(entry, st, evidence, results_dir, meta)
         written += 1
+        if st in ("FAIL", "INFRA_ERROR"):
+            recover_server(args)
 
     summary = {
         "success": counts["FAIL"] == 0 and counts["INFRA_ERROR"] == 0,

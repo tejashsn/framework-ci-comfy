@@ -272,6 +272,18 @@ def main():
         write_gha_output("skip_reason", f"os_mismatch:{os_fam}")
         sys.exit(2)
 
+    python_exe = (os.environ.get("COMFYUI_PYTHON")
+                  or os.environ.get("CI_PYTHON")
+                  or sys.executable)
+    import test_requirements
+    supported, skip_reason = test_requirements.check_requirements(
+        test, gpu_arch=args.gpu_arch, os_family=os_fam, python_exe=python_exe)
+    if not supported:
+        print(f"[SKIP] {args.execute} - {skip_reason}")
+        write_gha_output("result", "SKIP")
+        write_gha_output("skip_reason", skip_reason.replace(" ", "_")[:200])
+        sys.exit(2)
+
     # Dry run: validate paths, no GPU calls
     if args.dry_run:
         workflow_path = resolve_workflow_path(test["workflow"])
@@ -354,6 +366,38 @@ def main():
             write_gha_output("skip_reason", "model_identity_mismatch")
             sys.exit(2)
 
+        # Workflow input assets (LoadImage/LoadVideo under ComfyUI/input/).
+        import fetch_workflow_inputs
+        import workflow_input_check
+        try:
+            missing_inputs = workflow_input_check.missing_inputs(
+                workflow_file, comfy_path)
+        except Exception:
+            missing_inputs = []
+        if missing_inputs and fetch_workflow_inputs.auto_fetch_enabled():
+            print(f"[fetch-input] {len(missing_inputs)} input asset(s) missing "
+                  f"— starting auto-download")
+            ir = fetch_workflow_inputs.ensure_missing(missing_inputs, comfy_path)
+            for err in ir.errors:
+                print(f"[fetch-input] {err}")
+            try:
+                missing_inputs = workflow_input_check.missing_inputs(
+                    workflow_file, comfy_path)
+            except Exception:
+                missing_inputs = list(missing_inputs)
+        if missing_inputs:
+            msg = workflow_input_check.skip_message(missing_inputs)
+            if fetch_workflow_inputs.auto_fetch_enabled():
+                print(f"[FAIL] {args.execute} - still missing after input fetch: "
+                      f"{msg}", file=sys.stderr)
+                write_gha_output("result", "FAIL")
+                write_gha_output("failure_reason", "input_fetch_failed")
+                sys.exit(1)
+            print(f"[SKIP] {args.execute} - {msg}")
+            write_gha_output("result", "SKIP")
+            write_gha_output("skip_reason", "input_missing")
+            sys.exit(2)
+
     # Output-dir writability preflight: an unwritable ComfyUI output dir is an
     # environment problem (INFRA_ERROR), not a model FAIL. Catch it up-front with
     # a clear FIX instead of letting every test fail later with "no media".
@@ -403,27 +447,31 @@ def main():
         dur = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
         reason = (f"timeout after {timeout_min} min "
                   f"(hardware too slow for configured passes)")
-        print(f"[FAIL] {args.execute} timed out after {timeout_min} min "
-              f"-- reason: {reason}", file=sys.stderr)
         # A timeout is a prime crash/hang case - snapshot the server log so the
         # GPU/HIP hang traceback is preserved beside this test (always write, so
         # the evidence file exists for this non-PASS path too).
         tail = capture_server_tail(evidence_dir, always_write=True)
-        last = [ln for ln in tail.splitlines() if ln.strip()]
-        if last:
-            reason += f" | comfyui_server last line: {last[-1][:200]}"
+        import failure_classify
+        category, reason, verdict_override = failure_classify.classify(
+            reason, server_tail=tail)
+        timeout_verdict = verdict_override or "FAIL"
+        tag = timeout_verdict
+        print(f"[{tag}] {args.execute} timed out after {timeout_min} min "
+              f"-- reason: {reason}", file=sys.stderr)
         (evidence_dir / "summary.json").write_text(json.dumps({
             "test_name": args.execute, "tms_key": test["tms_key"],
             "execution_label": args.execution_label, "rocm_version": args.rocm_version,
             "gpu_arch": args.gpu_arch, "detected_gpu_arch": detect_gpu_arch(),
             "os_version": args.os_version,
-            "verdict": "FAIL", "failure_reason": reason, "io_error": False,
+            "verdict": timeout_verdict, "failure_reason": reason,
+            "failure_category": category, "io_error": False,
             "server_log_tail": "comfyui_server_tail.log", "duration_s": dur,
             "timestamp": ts, "evidence_dir": str(evidence_dir),
         }, indent=2))
-        write_gha_output("result", "FAIL")
-        write_gha_output("fail_reason", "timeout")
-        sys.exit(1)
+        write_gha_output("result", timeout_verdict)
+        write_gha_output("fail_reason", category)
+        exit_by_verdict = {"PASS": 0, "FAIL": 1, "SKIP": 2, "INFRA_ERROR": 3}
+        sys.exit(exit_by_verdict.get(timeout_verdict, 1))
 
     duration_s = round((datetime.now(timezone.utc) - start).total_seconds(), 1)
 
@@ -461,12 +509,28 @@ def main():
     # so it isn't lost to the next relaunch or buried in the shared log. Always
     # write the file (even if empty/absent, note that) so its presence is
     # deterministic for every failure path, not just hard crashes.
+    failure_category = ""
     if verdict != "PASS":
         server_tail = capture_server_tail(evidence_dir, always_write=True)
-        if server_tail:
-            last = [ln for ln in server_tail.splitlines() if ln.strip()]
-            if last:
-                failure_reason += f" | comfyui_server last line: {last[-1][:200]}"
+        import failure_classify
+        run_errs = []
+        if results_file.exists():
+            try:
+                run_errs = [
+                    r.get("detail") for r in json.loads(
+                        results_file.read_text()).get("runs", [])
+                    if r.get("status") == "ERROR" and r.get("detail")
+                ]
+            except Exception:
+                pass
+        failure_category, refined, verdict_override = failure_classify.classify(
+            failure_reason, server_tail=server_tail, run_errors=run_errs)
+        if refined and refined != failure_reason:
+            failure_reason = refined
+        elif failure_category and failure_category != "unknown":
+            failure_reason = f"{failure_category}: {failure_reason}"
+        if verdict == "FAIL" and verdict_override:
+            verdict = verdict_override
 
     # Write summary record
     summary = {
@@ -479,6 +543,7 @@ def main():
         "os_version":      args.os_version,
         "verdict":         verdict,
         "failure_reason":  failure_reason,
+        "failure_category": failure_category or None,
         "io_error":        io_error,
         "server_log_tail": "comfyui_server_tail.log",
         "duration_s":      duration_s,

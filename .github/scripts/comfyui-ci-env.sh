@@ -15,6 +15,9 @@ resolve_comfyui_env() {
     if [ -d /home/master/ComfyUI ]; then
       echo "COMFYUI_PATH=/home/master/ComfyUI" >> "$GITHUB_ENV"
       export COMFYUI_PATH=/home/master/ComfyUI
+    elif [ -d /home/taccuser/ComfyUI ]; then
+      echo "COMFYUI_PATH=/home/taccuser/ComfyUI" >> "$GITHUB_ENV"
+      export COMFYUI_PATH=/home/taccuser/ComfyUI
     elif [ -d /c/TheRock/ComfyUI ]; then
       echo "COMFYUI_PATH=/c/TheRock/ComfyUI" >> "$GITHUB_ENV"
       export COMFYUI_PATH=/c/TheRock/ComfyUI
@@ -39,6 +42,8 @@ print(p or '', end='')
   if [ "$py" = "python3" ] || [ -z "$py" ]; then
     if [ -x /home/master/comfyui-host-venv/bin/python ]; then
       py=/home/master/comfyui-host-venv/bin/python
+    elif [ -x /home/taccuser/comfyui-host-venv/bin/python ]; then
+      py=/home/taccuser/comfyui-host-venv/bin/python
     elif [ -x /c/TheRock/.venv314/Scripts/python.exe ]; then
       py=/c/TheRock/.venv314/Scripts/python.exe
     fi

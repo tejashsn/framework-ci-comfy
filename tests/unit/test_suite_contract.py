@@ -357,3 +357,66 @@ def test_prefetch_disabled_is_noop(tmp_path, monkeypatch):
         ["comfyui_stable_diffusion_2_1"], str(tmp_path / "ComfyUI"),
     )
     assert rc == 0
+
+
+# --------------------------------------------------------------------------- #
+# workflow inputs + failure classification + test requirements
+# --------------------------------------------------------------------------- #
+def test_workflow_input_check_referenced_and_missing(tmp_path):
+    import workflow_input_check
+    comfy = tmp_path / "ComfyUI"
+    (comfy / "input").mkdir(parents=True)
+    wf = SUITE / "workflows" / "wan2.2_14b_i2v.json"
+    refs = workflow_input_check.referenced_inputs(wf)
+    assert "video_wan2_2_14B_i2v_input_image.jpg" in refs
+    missing = workflow_input_check.missing_inputs(wf, str(comfy))
+    assert "video_wan2_2_14B_i2v_input_image.jpg" in missing
+
+
+def test_fetch_workflow_inputs_uses_bundled_assets(tmp_path, monkeypatch):
+    import fetch_workflow_inputs
+    monkeypatch.setenv("AUTO_FETCH_MODELS", "true")
+    comfy = tmp_path / "ComfyUI"
+    ok, detail = fetch_workflow_inputs.download_one(
+        "video_wan2_2_14B_i2v_input_image.jpg", str(comfy), {},
+    )
+    assert ok, detail
+    assert "bundled" in detail
+    dest = comfy / "input" / "video_wan2_2_14B_i2v_input_image.jpg"
+    bundled = fetch_workflow_inputs.bundled_asset_path(
+        "video_wan2_2_14B_i2v_input_image.jpg")
+    assert dest.is_file()
+    assert dest.stat().st_size == bundled.stat().st_size
+
+
+def test_failure_classify_server_crash():
+    import failure_classify
+    tail = "Requested to load ChromaRadiance\nPin error.\nFatal Python error: Aborted\n"
+    category, reason, verdict = failure_classify.classify(
+        "prompt abc did not complete within 1800s",
+        server_tail=tail,
+    )
+    assert category == "server_crash"
+    assert verdict == "INFRA_ERROR"
+    assert "Pin error" in reason or "server_crash" in reason
+
+
+def test_failure_classify_missing_input():
+    import failure_classify
+    category, _, verdict = failure_classify.classify(
+        "submit/poll error: HTTP 400 Bad Request: Prompt outputs failed validation | "
+        "LoadImage[img] Invalid image file: example.jpg",
+    )
+    assert category == "missing_input"
+    assert verdict is None
+
+
+def test_test_requirements_arch_and_vram_skip():
+    import test_requirements
+    test = {"os": ["linux"], "min_vram_mb": 999999, "exclude_archs": ["gfx9999"]}
+    ok, reason = test_requirements.check_arch(test, "gfx9999")
+    assert not ok and "exclude_archs" in reason
+    ok, reason = test_requirements.check_requirements(
+        test, gpu_arch="gfx1100", os_family="linux", python_exe=sys.executable)
+    # VRAM may pass or be skipped on hosts without torch GPU; arch must pass.
+    assert ok or "VRAM" in reason or "vram" in reason.lower()

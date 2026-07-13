@@ -1,0 +1,19 @@
+{
+  "_upstream": "https://github.com/Comfy-Org/workflow_templates/blob/main/workflow_template_input_files.json",
+  "example.png": {
+    "source": { "type": "bundled" },
+    "upstream_url": "https://raw.githubusercontent.com/Comfy-Org/workflow_templates/refs/heads/main/input/example.png"
+  },
+  "video_wan2_2_14B_i2v_input_image.jpg": {
+    "source": { "type": "bundled" },
+    "upstream_url": "https://raw.githubusercontent.com/Comfy-Org/workflow_templates/refs/heads/main/input/video_wan2_2_14B_i2v_input_image.jpg"
+  },
+  "ltxv_image_to_video_input_image.jpg": {
+    "source": { "type": "bundled" },
+    "upstream_url": "https://raw.githubusercontent.com/Comfy-Org/workflow_templates/refs/heads/main/input/ltxv_image_to_video_input_image.jpg"
+  },
+  "sd3.5_large_canny_controlnet_example_input_image.png": {
+    "source": { "type": "bundled" },
+    "upstream_url": "https://raw.githubusercontent.com/Comfy-Org/workflow_templates/refs/heads/main/input/sd3.5_large_canny_controlnet_example_input_image.png"
+  }
+}

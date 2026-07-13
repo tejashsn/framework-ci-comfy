@@ -33,7 +33,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import create_config  # noqa: E402
 import fetch_models  # noqa: E402
+import fetch_workflow_inputs  # noqa: E402
 import model_check  # noqa: E402
+import workflow_input_check  # noqa: E402
 
 
 def _log(msg: str, *, error: bool = False) -> None:
@@ -97,6 +99,56 @@ def collect_missing_for_tests(test_names, comfy_path):
     return [(fn, sd) for fn, sd in seen.items()]
 
 
+def collect_missing_inputs_for_tests(test_names, comfy_path):
+    """Union of input filenames missing across every selected test."""
+    manifest = _load_manifest()
+    seen: set[str] = set()
+    for name in test_names:
+        workflow = _workflow_for(name, manifest)
+        if not workflow:
+            continue
+        wf_path = workflow
+        if not Path(wf_path).is_absolute():
+            wf_path = str(SUITE_DIR / workflow)
+        try:
+            missing = workflow_input_check.missing_inputs(wf_path, comfy_path)
+        except Exception as e:
+            _log(f"warn {name}: could not check workflow inputs ({e})")
+            continue
+        seen.update(missing)
+    return sorted(seen)
+
+
+def prefetch_inputs(test_names, comfy_path, fail_on_error: bool = True) -> int:
+    """Prefetch workflow input assets. Returns exit code (0 = ok)."""
+    if not fetch_workflow_inputs.auto_fetch_enabled():
+        _log("AUTO_FETCH_MODELS disabled — skipping workflow input prefetch")
+        return 0
+    if not comfy_path:
+        _log("COMFYUI_PATH not resolved — cannot prefetch workflow inputs",
+             error=fail_on_error)
+        return 1 if fail_on_error else 0
+
+    missing = collect_missing_inputs_for_tests(test_names, comfy_path)
+    if not missing:
+        _log(f"all workflow inputs present for {len(test_names)} test(s)")
+        return 0
+
+    _log(f"{len(missing)} workflow input(s) to fetch: "
+         + ", ".join(missing))
+    result = fetch_workflow_inputs.ensure_missing(missing, comfy_path)
+    still = collect_missing_inputs_for_tests(test_names, comfy_path)
+    if still:
+        _log(f"workflow inputs still missing: {', '.join(still)}",
+             error=fail_on_error)
+        for err in result.errors:
+            _log(f"  reason: {err}")
+        return 1 if fail_on_error else 0
+    _log(f"workflow input prefetch complete — "
+         f"{len(result.downloaded)} downloaded")
+    return 0
+
+
 def prefetch_tests(test_names, comfy_path, fail_on_error: bool = True) -> int:
     """Prefetch all missing weights for the given tests. Returns an exit code.
 
@@ -136,6 +188,10 @@ def prefetch_tests(test_names, comfy_path, fail_on_error: bool = True) -> int:
 
     _log(f"prefetch complete — {len(result.downloaded)} downloaded, "
          f"{len(result.already_present)} already present")
+
+    input_rc = prefetch_inputs(test_names, comfy_path, fail_on_error=fail_on_error)
+    if input_rc != 0:
+        return input_rc
     return 0
 
 

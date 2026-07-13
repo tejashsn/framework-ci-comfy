@@ -207,7 +207,7 @@ jobs:
           source .github/scripts/comfyui-ci-env.sh
           resolve_comfyui_env
 
-      - name: Prefetch model weights
+      - name: Prefetch models and workflow inputs
         run: |
           set -euo pipefail
           PY="${COMFYUI_PYTHON:-${CI_PYTHON:-$(command -v python3 2>/dev/null || command -v python)}}"
@@ -218,7 +218,7 @@ jobs:
       - name: Prefetch summary
         if: always()
         run: |
-          echo "## Model prefetch (${{ matrix.runner_label }})" >> $GITHUB_STEP_SUMMARY
+          echo "## Model and workflow input prefetch (${{ matrix.runner_label }})" >> $GITHUB_STEP_SUMMARY
           echo "ComfyUI path: \`${COMFYUI_PATH:-unknown}\`" >> $GITHUB_STEP_SUMMARY
 
   # ==================== BENCHMARK ====================
