@@ -8,11 +8,34 @@ burning the full timeout and recording a misleading FAIL.
 
 from __future__ import annotations
 
+import os
 from typing import Optional, Tuple
 
 
 def _normalize_arch(arch: str) -> str:
     return (arch or "").strip().lower()
+
+
+def effective_min_vram_mb(test: dict, gpu_arch: str) -> int | None:
+    """Resolve the VRAM gate for this test on the given GPU arch.
+
+    Per-arch overrides (min_vram_mb_by_arch) take precedence over the base
+    min_vram_mb, mirroring timeout_minutes_by_arch. Returns None when no gate.
+    """
+    by_arch = test.get("min_vram_mb_by_arch") or {}
+    arch = _normalize_arch(gpu_arch)
+    if arch and arch in by_arch:
+        try:
+            return int(by_arch[arch])
+        except (TypeError, ValueError):
+            pass
+    min_mb = test.get("min_vram_mb")
+    if min_mb is None:
+        return None
+    try:
+        return int(min_mb)
+    except (TypeError, ValueError):
+        return None
 
 
 def check_arch(test: dict, gpu_arch: str) -> Tuple[bool, str]:
@@ -35,9 +58,11 @@ def check_os(test: dict, os_family: str) -> Tuple[bool, str]:
     return True, ""
 
 
-def check_vram(test: dict, python_exe: str) -> Tuple[bool, str]:
+def check_vram(test: dict, gpu_arch: str, python_exe: str) -> Tuple[bool, str]:
     """SKIP when free VRAM is below manifest min_vram_mb (best-effort)."""
-    min_mb = test.get("min_vram_mb")
+    if os.environ.get("COMFYUI_IGNORE_VRAM", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True, ""
+    min_mb = effective_min_vram_mb(test, gpu_arch)
     if not min_mb:
         return True, ""
     try:
@@ -72,7 +97,8 @@ def check_requirements(
     if not ok:
         return False, reason
     if python_exe:
-        ok, reason = check_vram(test, python_exe)
+        ok, reason = check_vram(test, gpu_arch, python_exe)
         if not ok:
             return False, reason
     return True, ""
+

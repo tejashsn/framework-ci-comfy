@@ -222,6 +222,15 @@
         "windows"
       ],
       "min_vram_mb": 16384,
+      "min_vram_mb_by_arch": {
+        "gfx1201": 15360,
+        "gfx1100": 15360,
+        "gfx1101": 15360,
+        "gfx1102": 15360,
+        "gfx1151": 15360,
+        "gfx1152": 15360,
+        "gfx1153": 15360
+      },
       "expected_output_type": "image",
       "perf_targets": {
         "warmup_runs": 1,
@@ -252,6 +261,15 @@
         "windows"
       ],
       "min_vram_mb": 16384,
+      "min_vram_mb_by_arch": {
+        "gfx1201": 15360,
+        "gfx1100": 15360,
+        "gfx1101": 15360,
+        "gfx1102": 15360,
+        "gfx1151": 15360,
+        "gfx1152": 15360,
+        "gfx1153": 15360
+      },
       "expected_output_type": "image",
       "perf_targets": {
         "warmup_runs": 1,
@@ -420,6 +438,15 @@
         "windows"
       ],
       "min_vram_mb": 16384,
+      "min_vram_mb_by_arch": {
+        "gfx1201": 15360,
+        "gfx1100": 15360,
+        "gfx1101": 15360,
+        "gfx1102": 15360,
+        "gfx1151": 15360,
+        "gfx1152": 15360,
+        "gfx1153": 15360
+      },
       "expected_output_type": "video",
       "perf_targets": {
         "warmup_runs": 0,
@@ -447,6 +474,15 @@
         "windows"
       ],
       "min_vram_mb": 16384,
+      "min_vram_mb_by_arch": {
+        "gfx1201": 15360,
+        "gfx1100": 15360,
+        "gfx1101": 15360,
+        "gfx1102": 15360,
+        "gfx1151": 15360,
+        "gfx1152": 15360,
+        "gfx1153": 15360
+      },
       "expected_output_type": "video",
       "perf_targets": {
         "warmup_runs": 0,
@@ -475,6 +511,15 @@
         "windows"
       ],
       "min_vram_mb": 16384,
+      "min_vram_mb_by_arch": {
+        "gfx1201": 15360,
+        "gfx1100": 15360,
+        "gfx1101": 15360,
+        "gfx1102": 15360,
+        "gfx1151": 15360,
+        "gfx1152": 15360,
+        "gfx1153": 15360
+      },
       "expected_output_type": "video",
       "perf_targets": {
         "warmup_runs": 0,
@@ -560,6 +605,15 @@
         "windows"
       ],
       "min_vram_mb": 24576,
+      "min_vram_mb_by_arch": {
+        "gfx1201": 15360,
+        "gfx1100": 15360,
+        "gfx1101": 15360,
+        "gfx1102": 15360,
+        "gfx1151": 15360,
+        "gfx1152": 15360,
+        "gfx1153": 15360
+      },
       "expected_output_type": "video",
       "perf_targets": {
         "warmup_runs": 0,
@@ -588,6 +642,15 @@
         "windows"
       ],
       "min_vram_mb": 24576,
+      "min_vram_mb_by_arch": {
+        "gfx1201": 15360,
+        "gfx1100": 15360,
+        "gfx1101": 15360,
+        "gfx1102": 15360,
+        "gfx1151": 15360,
+        "gfx1152": 15360,
+        "gfx1153": 15360
+      },
       "expected_output_type": "video",
       "perf_targets": {
         "warmup_runs": 0,

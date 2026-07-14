@@ -474,11 +474,11 @@
   },
   "wan_2.1_vae.safetensors": {
     "sha256": null,
-    "size_bytes": null,
+    "size_bytes": 253815318,
     "source": {
       "type": "huggingface",
       "repo_id": "Comfy-Org/Wan_2.1_ComfyUI_repackaged",
-      "filename": "wan_2.1_vae.safetensors",
+      "filename": "split_files/vae/wan_2.1_vae.safetensors",
       "gated": false
     },
     "subdirs": [

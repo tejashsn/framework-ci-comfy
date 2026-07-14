@@ -245,6 +245,7 @@ stay SKIPped until you provide the weights. The suite never auto-downloads weigh
 | every test SKIPs with "not found" | wrong/undetected models path | `export COMFYUI_PATH=<folder with models/>` |
 | test FAILs with a torch/CUDA error | ran with the wrong Python | use ComfyUI's venv Python |
 | "0 tests selected" | your GPU isn't in those tests' arch list | check `--arch`; that's expected for some tests |
+| test SKIPs with "needs >= … MB free VRAM" | manifest VRAM gate (honest skip) | lower `min_vram_mb_by_arch` in manifest, or one-off: `export COMFYUI_IGNORE_VRAM=1` |
 
 ---
 
