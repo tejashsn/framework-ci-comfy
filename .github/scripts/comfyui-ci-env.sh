@@ -46,6 +46,8 @@ print(p or '', end='')
       py=/home/taccuser/comfyui-host-venv/bin/python
     elif [ -x /c/TheRock/.venv314/Scripts/python.exe ]; then
       py=/c/TheRock/.venv314/Scripts/python.exe
+    elif [ -x /c/TheRock/.venv/Scripts/python.exe ]; then
+      py=/c/TheRock/.venv/Scripts/python.exe
     fi
   fi
   echo "Using Python: $($py --version 2>&1)"
